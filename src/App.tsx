@@ -1,9 +1,12 @@
+import { useEffect } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import clsx from 'clsx';
 import Dashboard from './routes/Dashboard';
 import AssetsList from './routes/AssetsList';
 import AssetForm from './routes/AssetForm';
 import Settings from './routes/Settings';
+import { ensureFreshFx } from './services/fx/erApiClient';
+import { takeSnapshot } from './domain/takeSnapshot';
 
 const navItems = [
   { to: '/', label: '總覽', end: true },
@@ -12,6 +15,21 @@ const navItems = [
 ];
 
 function App() {
+  useEffect(() => {
+    (async () => {
+      try {
+        await ensureFreshFx();
+      } catch {
+        /* silent — explicit refresh button covers errors */
+      }
+      try {
+        await takeSnapshot('auto');
+      } catch {
+        /* silent */
+      }
+    })();
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/80 backdrop-blur">

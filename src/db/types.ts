@@ -1,4 +1,4 @@
-export type Category = 'liquid' | 'investment' | 'fixed' | 'receivable' | 'liability';
+export type Category = 'liquid' | 'investment' | 'fixed';
 
 export type AssetType =
   | 'cash'
@@ -6,9 +6,9 @@ export type AssetType =
   | 'crypto'
   | 'real_estate'
   | 'vehicle'
-  | 'receivable'
-  | 'liability'
   | 'custom';
+
+export type Broker = 'sub_broker' | 'overseas' | 'tw_broker';
 
 export interface Asset {
   id?: number;
@@ -18,7 +18,9 @@ export interface Asset {
   currency: string;
   symbol?: string;
   quantity?: number;
+  broker?: Broker;
   manualValue?: number;
+  manualUnitPrice?: number;
   notes?: string;
   archivedAt?: number;
   createdAt: number;
@@ -47,7 +49,6 @@ export interface Snapshot {
   baseCurrency: string;
   totalNetWorth: number;
   byCategory: Record<Category, number>;
-  byAsset: Array<{ assetId: number; valueInBase: number }>;
   source: 'auto' | 'manual';
 }
 

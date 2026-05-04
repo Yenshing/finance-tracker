@@ -10,11 +10,7 @@ interface Props {
 }
 
 export default function CategoryCard({ meta, amount, base, totalAssets, count }: Props) {
-  const pct =
-    meta.key === 'liability' || totalAssets <= 0
-      ? null
-      : (amount / totalAssets) * 100;
-  const sign = meta.key === 'liability' ? '-' : '';
+  const pct = totalAssets > 0 ? (amount / totalAssets) * 100 : null;
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
@@ -23,12 +19,11 @@ export default function CategoryCard({ meta, amount, base, totalAssets, count }:
         <span className="text-sm font-medium text-gray-700">{meta.label}</span>
       </div>
       <div className="mt-2 text-xl font-semibold tabular-nums text-gray-900">
-        {sign}
         {formatCurrency(amount, base)}
       </div>
       <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
         <span>{count} 筆</span>
-        {pct !== null && <span>{pct.toFixed(1)}% 佔資產</span>}
+        {pct !== null && <span>{pct.toFixed(1)}%</span>}
       </div>
     </div>
   );
