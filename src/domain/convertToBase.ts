@@ -1,9 +1,5 @@
 import { fxCache } from '../db/repositories/cacheRepo';
 
-/**
- * Phase 1: returns the amount unchanged when currencies match;
- * returns null otherwise (multi-currency lands in Phase 2).
- */
 export async function convertToBase(
   amount: number,
   currency: string,
@@ -13,6 +9,9 @@ export async function convertToBase(
 
   const direct = await fxCache.get(currency, baseCurrency);
   if (direct) return amount * direct.rate;
+
+  const inverse = await fxCache.get(baseCurrency, currency);
+  if (inverse && inverse.rate !== 0) return amount / inverse.rate;
 
   return null;
 }

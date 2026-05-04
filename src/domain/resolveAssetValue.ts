@@ -1,4 +1,4 @@
-import type { Asset } from '../db/types';
+import type { Asset, PriceCacheRow } from '../db/types';
 
 export interface ResolvedValue {
   valueInAssetCurrency: number;
@@ -6,14 +6,23 @@ export interface ResolvedValue {
   stale: boolean;
 }
 
-/**
- * Phase 1: only manualValue is supported.
- * Phase 3 will add stock/crypto resolution via priceCache.
- */
-export function resolveAssetValue(asset: Asset): ResolvedValue {
-  if (asset.type === 'stock' || asset.type === 'crypto') {
+export function resolveAssetValue(
+  asset: Asset,
+  priceMap: Map<string, PriceCacheRow>,
+): ResolvedValue {
+  const isPriced = asset.type === 'stock' || asset.type === 'crypto';
+  if (isPriced && asset.symbol && typeof asset.quantity === 'number') {
+    const cached = priceMap.get(asset.symbol);
+    if (cached) {
+      return {
+        valueInAssetCurrency: cached.price * asset.quantity,
+        pricedAt: cached.fetchedAt,
+        stale: false,
+      };
+    }
     return { valueInAssetCurrency: 0, pricedAt: null, stale: true };
   }
+
   return {
     valueInAssetCurrency: asset.manualValue ?? 0,
     pricedAt: asset.updatedAt,

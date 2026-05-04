@@ -1,4 +1,4 @@
-export type Category = 'liquid' | 'investment' | 'fixed' | 'receivable' | 'liability';
+export type Category = 'liquid' | 'investment' | 'fixed';
 
 export type AssetType =
   | 'cash'
@@ -6,9 +6,9 @@ export type AssetType =
   | 'crypto'
   | 'real_estate'
   | 'vehicle'
-  | 'receivable'
-  | 'liability'
   | 'custom';
+
+export type Broker = 'sub_broker' | 'overseas' | 'tw_broker';
 
 export interface Asset {
   id?: number;
@@ -18,6 +18,7 @@ export interface Asset {
   currency: string;
   symbol?: string;
   quantity?: number;
+  broker?: Broker;
   manualValue?: number;
   notes?: string;
   archivedAt?: number;
