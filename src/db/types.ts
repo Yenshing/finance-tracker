@@ -20,6 +20,7 @@ export interface Asset {
   quantity?: number;
   broker?: Broker;
   manualValue?: number;
+  manualUnitPrice?: number;
   notes?: string;
   archivedAt?: number;
   createdAt: number;

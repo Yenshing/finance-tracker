@@ -4,6 +4,8 @@ import clsx from 'clsx';
 import { CATEGORY_BY_KEY, ASSET_TYPE_LABELS } from '../domain/categories';
 import { BROKER_BY_CODE } from '../domain/brokers';
 import { CRYPTO_BY_ID } from '../domain/cryptos';
+import { INVESTMENT_BUCKETS } from '../domain/investmentBuckets';
+import { LIQUID_BUCKETS } from '../domain/liquidBuckets';
 import { formatCurrency } from '../lib/formatCurrency';
 import { assetsRepo } from '../db/repositories/assetsRepo';
 import { usePortfolio } from '../state/usePortfolio';
@@ -16,6 +18,13 @@ const liquidMeta = CATEGORY_BY_KEY.liquid;
 const investmentMeta = CATEGORY_BY_KEY.investment;
 const fixedMeta = CATEGORY_BY_KEY.fixed;
 
+const BUCKET_BY_KEY = Object.fromEntries(
+  INVESTMENT_BUCKETS.map((b) => [b.key, b]),
+);
+const LIQUID_BUCKET_BY_KEY = Object.fromEntries(
+  LIQUID_BUCKETS.map((b) => [b.key, b]),
+);
+
 const isUsStock = (v: AssetView) =>
   v.asset.type === 'stock' && v.asset.broker !== 'tw_broker';
 const isTwStock = (v: AssetView) =>
@@ -24,14 +33,28 @@ const isCrypto = (v: AssetView) => v.asset.type === 'crypto';
 const isOtherInvestment = (v: AssetView) =>
   v.asset.category === 'investment' && v.asset.type === 'custom';
 
+function totalOf(items: AssetView[]): number {
+  return items.reduce((s, v) => s + (v.valueInBase ?? 0), 0);
+}
+
 export default function AssetsList() {
   const portfolio = usePortfolio();
   const [sort, setSort] = useState<SortMode>('value_desc');
   const [usBrokerFilter, setUsBrokerFilter] = useState<UsBrokerFilter>('all');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   if (!portfolio) {
     return <div className="text-sm text-gray-500">載入中…</div>;
   }
+
+  const isCollapsed = (id: string) => collapsed.has(id);
+  const toggle = (id: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   function sortItems(items: AssetView[]): AssetView[] {
     const copy = [...items];
@@ -48,6 +71,8 @@ export default function AssetsList() {
   const liquidItems = sortItems(
     portfolio.assets.filter((v) => v.asset.category === 'liquid'),
   );
+  const liquidUsd = liquidItems.filter((v) => v.asset.currency === 'USD');
+  const liquidTwd = liquidItems.filter((v) => v.asset.currency === 'TWD');
   const fixedItems = sortItems(
     portfolio.assets.filter((v) => v.asset.category === 'fixed'),
   );
@@ -94,36 +119,86 @@ export default function AssetsList() {
       )}
 
       {liquidItems.length > 0 && (
-        <CategoryBlock
-          color={liquidMeta.hex}
-          label={liquidMeta.label}
-          count={liquidItems.length}
-        >
-          <AssetTable
-            items={liquidItems}
+        <section>
+          <TopLevelHeader
+            color={liquidMeta.hex}
+            label={liquidMeta.label}
+            count={liquidItems.length}
+            total={totalOf(liquidItems)}
             base={portfolio.base}
             totalAssets={portfolio.totalAssets}
           />
-        </CategoryBlock>
+          <div className="mt-2 space-y-3">
+            {liquidUsd.length > 0 && (
+              <Block
+                color={LIQUID_BUCKET_BY_KEY.usd_cash!.color}
+                label={LIQUID_BUCKET_BY_KEY.usd_cash!.label}
+                count={liquidUsd.length}
+                total={totalOf(liquidUsd)}
+                base={portfolio.base}
+                totalAssets={portfolio.totalAssets}
+                collapsed={isCollapsed('liquid_usd')}
+                onToggle={() => toggle('liquid_usd')}
+                indent
+              >
+                <AssetTable
+                  items={liquidUsd}
+                  base={portfolio.base}
+                  totalAssets={portfolio.totalAssets}
+                />
+              </Block>
+            )}
+            {liquidTwd.length > 0 && (
+              <Block
+                color={LIQUID_BUCKET_BY_KEY.twd_cash!.color}
+                label={LIQUID_BUCKET_BY_KEY.twd_cash!.label}
+                count={liquidTwd.length}
+                total={totalOf(liquidTwd)}
+                base={portfolio.base}
+                totalAssets={portfolio.totalAssets}
+                collapsed={isCollapsed('liquid_twd')}
+                onToggle={() => toggle('liquid_twd')}
+                indent
+              >
+                <AssetTable
+                  items={liquidTwd}
+                  base={portfolio.base}
+                  totalAssets={portfolio.totalAssets}
+                />
+              </Block>
+            )}
+          </div>
+        </section>
       )}
 
       {investmentItems.length > 0 && (
-        <CategoryBlock
-          color={investmentMeta.hex}
-          label={investmentMeta.label}
-          count={investmentItems.length}
-        >
-          <div className="space-y-4">
+        <section>
+          <TopLevelHeader
+            color={investmentMeta.hex}
+            label={investmentMeta.label}
+            count={investmentItems.length}
+            total={totalOf(investmentItems)}
+            base={portfolio.base}
+            totalAssets={portfolio.totalAssets}
+          />
+          <div className="mt-2 space-y-3">
             {allUsStocks.length > 0 && (
-              <SubBlock
-                title="美元股票"
+              <Block
+                color={BUCKET_BY_KEY.us_stock!.color}
+                label="美元股票"
                 count={allUsStocks.length}
+                total={totalOf(allUsStocks)}
+                base={portfolio.base}
+                totalAssets={portfolio.totalAssets}
+                collapsed={isCollapsed('us_stock')}
+                onToggle={() => toggle('us_stock')}
                 trailing={
                   <UsBrokerChips
                     value={usBrokerFilter}
                     onChange={setUsBrokerFilter}
                   />
                 }
+                indent
               >
                 {visibleUsStocks.length === 0 ? (
                   <EmptyFilterPlaceholder />
@@ -134,101 +209,214 @@ export default function AssetsList() {
                     totalAssets={portfolio.totalAssets}
                   />
                 )}
-              </SubBlock>
+              </Block>
             )}
             {twStocks.length > 0 && (
-              <SubBlock title="台灣股票" count={twStocks.length}>
+              <Block
+                color={BUCKET_BY_KEY.tw_stock!.color}
+                label="台灣股票"
+                count={twStocks.length}
+                total={totalOf(twStocks)}
+                base={portfolio.base}
+                totalAssets={portfolio.totalAssets}
+                collapsed={isCollapsed('tw_stock')}
+                onToggle={() => toggle('tw_stock')}
+                indent
+              >
                 <AssetTable
                   items={twStocks}
                   base={portfolio.base}
                   totalAssets={portfolio.totalAssets}
                 />
-              </SubBlock>
+              </Block>
             )}
             {cryptos.length > 0 && (
-              <SubBlock title="加密貨幣" count={cryptos.length}>
+              <Block
+                color={BUCKET_BY_KEY.crypto!.color}
+                label="加密貨幣"
+                count={cryptos.length}
+                total={totalOf(cryptos)}
+                base={portfolio.base}
+                totalAssets={portfolio.totalAssets}
+                collapsed={isCollapsed('crypto')}
+                onToggle={() => toggle('crypto')}
+                indent
+              >
                 <AssetTable
                   items={cryptos}
                   base={portfolio.base}
                   totalAssets={portfolio.totalAssets}
                 />
-              </SubBlock>
+              </Block>
             )}
             {others.length > 0 && (
-              <SubBlock title="其他" count={others.length}>
+              <Block
+                color={BUCKET_BY_KEY.other!.color}
+                label="其他"
+                count={others.length}
+                total={totalOf(others)}
+                base={portfolio.base}
+                totalAssets={portfolio.totalAssets}
+                collapsed={isCollapsed('other')}
+                onToggle={() => toggle('other')}
+                indent
+              >
                 <AssetTable
                   items={others}
                   base={portfolio.base}
                   totalAssets={portfolio.totalAssets}
                 />
-              </SubBlock>
+              </Block>
             )}
           </div>
-        </CategoryBlock>
+        </section>
       )}
 
       {fixedItems.length > 0 && (
-        <CategoryBlock
-          color={fixedMeta.hex}
-          label={fixedMeta.label}
-          count={fixedItems.length}
-        >
-          <AssetTable
-            items={fixedItems}
+        <section>
+          <TopLevelHeader
+            color={fixedMeta.hex}
+            label={fixedMeta.label}
+            count={fixedItems.length}
+            total={totalOf(fixedItems)}
             base={portfolio.base}
             totalAssets={portfolio.totalAssets}
           />
-        </CategoryBlock>
+          <div className="mt-2">
+            <AssetTable
+              items={fixedItems}
+              base={portfolio.base}
+              totalAssets={portfolio.totalAssets}
+            />
+          </div>
+        </section>
       )}
     </div>
   );
 }
 
-function CategoryBlock({
+function TopLevelHeader({
   color,
   label,
   count,
+  total,
+  base,
+  totalAssets,
+}: {
+  color: string;
+  label: string;
+  count: number;
+  total: number;
+  base: string;
+  totalAssets: number;
+}) {
+  const pct = totalAssets > 0 ? (total / totalAssets) * 100 : null;
+  return (
+    <header className="flex flex-wrap items-center gap-3 border-b border-gray-200 pb-2">
+      <span
+        className="h-3 w-3 shrink-0 rounded-full"
+        style={{ background: color }}
+      />
+      <h2 className="text-lg font-semibold text-gray-800">{label}</h2>
+      <span className="text-sm text-gray-400">{count} 筆</span>
+      <span className="ml-auto flex items-baseline gap-2">
+        <span className="text-xl font-semibold tabular-nums text-gray-900">
+          {formatCurrency(total, base)}
+        </span>
+        {pct !== null && (
+          <span className="text-base tabular-nums text-gray-500">
+            {pct.toFixed(1)}%
+          </span>
+        )}
+      </span>
+    </header>
+  );
+}
+
+function Block({
+  color,
+  label,
+  count,
+  total,
+  base,
+  totalAssets,
+  collapsed,
+  onToggle,
+  trailing,
+  indent,
   children,
 }: {
   color: string;
   label: string;
   count: number;
+  total: number;
+  base: string;
+  totalAssets: number;
+  collapsed: boolean;
+  onToggle: () => void;
+  trailing?: React.ReactNode;
+  indent?: boolean;
   children: React.ReactNode;
 }) {
+  const pct = totalAssets > 0 ? (total / totalAssets) * 100 : null;
   return (
-    <section>
-      <header className="mb-2 flex items-center gap-2">
+    <section className={clsx(indent && 'pl-3')}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full flex-wrap items-center gap-2 rounded-md py-1 text-left hover:bg-gray-100/50"
+        aria-expanded={!collapsed}
+      >
+        <Chevron open={!collapsed} />
         <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-        <h2 className="text-sm font-semibold text-gray-700">{label}</h2>
+        <h3
+          className={clsx(
+            indent
+              ? 'text-xs font-semibold uppercase tracking-wider text-gray-600'
+              : 'text-sm font-semibold text-gray-700',
+          )}
+        >
+          {label}
+        </h3>
         <span className="text-xs text-gray-400">{count} 筆</span>
-      </header>
-      {children}
+        {trailing && (
+          <span
+            className="ml-2"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            {trailing}
+          </span>
+        )}
+        <span className="ml-auto flex items-baseline gap-2 pr-1">
+          <span className="text-sm font-semibold tabular-nums text-gray-900">
+            {formatCurrency(total, base)}
+          </span>
+          {pct !== null && (
+            <span className="text-xs tabular-nums text-gray-500">
+              {pct.toFixed(1)}%
+            </span>
+          )}
+        </span>
+      </button>
+      {!collapsed && <div className="mt-1.5">{children}</div>}
     </section>
   );
 }
 
-function SubBlock({
-  title,
-  count,
-  trailing,
-  children,
-}: {
-  title: string;
-  count: number;
-  trailing?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+function Chevron({ open }: { open: boolean }) {
   return (
-    <div>
-      <div className="mb-1 flex flex-wrap items-center gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-          {title}
-        </h3>
-        <span className="text-xs text-gray-400">{count} 筆</span>
-        {trailing && <div className="ml-auto">{trailing}</div>}
-      </div>
-      {children}
-    </div>
+    <svg
+      className={clsx(
+        'h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform',
+        open && 'rotate-90',
+      )}
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M6 4l4 4-4 4V4z" />
+    </svg>
   );
 }
 
@@ -259,7 +447,10 @@ function UsBrokerChips({
         <button
           key={key}
           type="button"
-          onClick={() => onChange(key)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onChange(key);
+          }}
           className={clsx(
             'rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
             value === key
@@ -320,7 +511,7 @@ function AssetRow({
   base: string;
   totalAssets: number;
 }) {
-  const { asset, valueInAssetCurrency, valueInBase, pricedAt, stale } = view;
+  const { asset, valueInAssetCurrency, valueInBase, pricedAt, stale, source } = view;
   const isStock = asset.type === 'stock' && asset.symbol;
   const isCryptoRow = asset.type === 'crypto' && asset.symbol;
   const broker = asset.broker ? BROKER_BY_CODE[asset.broker] : null;
@@ -358,11 +549,12 @@ function AssetRow({
             </>
           ) : null}
         </div>
-        {pricedAt && (
+        {source === 'cache' && pricedAt && (
           <div className="text-gray-400">
             報價：{new Date(pricedAt).toLocaleString('zh-TW')}
           </div>
         )}
+        {source === 'manual' && <div className="text-gray-500">手動價</div>}
         {stale && <div className="text-amber-600">尚未抓價</div>}
       </div>
     );

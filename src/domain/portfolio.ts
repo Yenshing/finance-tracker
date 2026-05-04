@@ -1,5 +1,5 @@
 import type { Asset, Category, PriceCacheRow } from '../db/types';
-import { resolveAssetValue } from './resolveAssetValue';
+import { resolveAssetValue, type PriceSource } from './resolveAssetValue';
 import { convertToBase } from './convertToBase';
 import { VALID_CATEGORY_KEYS } from './categories';
 
@@ -9,6 +9,7 @@ export interface AssetView {
   valueInBase: number | null;
   pricedAt: number | null;
   stale: boolean;
+  source: PriceSource;
 }
 
 export interface PortfolioView {
@@ -63,6 +64,7 @@ export async function buildPortfolioView(
         valueInBase,
         pricedAt: resolved.pricedAt,
         stale: resolved.stale,
+        source: resolved.source,
       };
     }),
   );

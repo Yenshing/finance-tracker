@@ -26,6 +26,7 @@ interface FormState {
   broker: Broker;
   symbolInput: string;
   quantity: string;
+  manualUnitPrice: string;
   cryptoId: string;
   notes: string;
 }
@@ -39,6 +40,7 @@ const blank = (currency: string): FormState => ({
   broker: 'sub_broker',
   symbolInput: '',
   quantity: '',
+  manualUnitPrice: '',
   cryptoId: CRYPTOS[0].id,
   notes: '',
 });
@@ -100,6 +102,10 @@ export default function AssetForm() {
         broker,
         symbolInput: stockParsed?.raw ?? '',
         quantity: existing.quantity !== undefined ? String(existing.quantity) : '',
+        manualUnitPrice:
+          existing.manualUnitPrice !== undefined
+            ? String(existing.manualUnitPrice)
+            : '',
         cryptoId,
         notes: existing.notes ?? '',
       });
@@ -164,6 +170,15 @@ export default function AssetForm() {
           alert('請輸入有效的股數');
           return;
         }
+        let manualUnitPrice: number | undefined;
+        if (brokerMeta.pricingNotYetSupported) {
+          const unit = Number(form.manualUnitPrice);
+          if (!Number.isFinite(unit) || unit <= 0) {
+            alert('請輸入有效的每股價格');
+            return;
+          }
+          manualUnitPrice = unit;
+        }
         payload = {
           category: form.category,
           type: form.type,
@@ -172,6 +187,7 @@ export default function AssetForm() {
           symbol: normalized,
           quantity: qty,
           broker: form.broker,
+          manualUnitPrice,
           notes: form.notes.trim() || undefined,
         };
         if (!brokerMeta.pricingNotYetSupported) stockSymbolToFetch = normalized;
@@ -337,10 +353,24 @@ export default function AssetForm() {
                 required
               />
             </Field>
+            {brokerMeta.pricingNotYetSupported && (
+              <Field label={`每股價格（${brokerMeta.currency}，手動）`}>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  value={form.manualUnitPrice}
+                  onChange={(e) => update('manualUnitPrice', e.target.value)}
+                  placeholder="例：850"
+                  className="input text-right tabular-nums"
+                  required
+                />
+              </Field>
+            )}
             <p className="text-xs text-gray-500">
               幣別 {brokerMeta.currency}（依券商類別自動決定）。
               {brokerMeta.pricingNotYetSupported
-                ? '台股報價尚未支援，市值會暫顯示為 0，等價格抓取功能完成後會自動補上。'
+                ? '台股自動報價尚未支援，請手動輸入每股價格；等查價 API 完成後會自動切換。'
                 : '儲存時自動抓當日收盤計算市值。'}
             </p>
           </>

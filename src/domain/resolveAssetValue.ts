@@ -1,9 +1,12 @@
 import type { Asset, PriceCacheRow } from '../db/types';
 
+export type PriceSource = 'cache' | 'manual' | null;
+
 export interface ResolvedValue {
   valueInAssetCurrency: number;
   pricedAt: number | null;
   stale: boolean;
+  source: PriceSource;
 }
 
 export function resolveAssetValue(
@@ -18,14 +21,24 @@ export function resolveAssetValue(
         valueInAssetCurrency: cached.price * asset.quantity,
         pricedAt: cached.fetchedAt,
         stale: false,
+        source: 'cache',
       };
     }
-    return { valueInAssetCurrency: 0, pricedAt: null, stale: true };
+    if (typeof asset.manualUnitPrice === 'number') {
+      return {
+        valueInAssetCurrency: asset.manualUnitPrice * asset.quantity,
+        pricedAt: asset.updatedAt,
+        stale: false,
+        source: 'manual',
+      };
+    }
+    return { valueInAssetCurrency: 0, pricedAt: null, stale: true, source: null };
   }
 
   return {
     valueInAssetCurrency: asset.manualValue ?? 0,
     pricedAt: asset.updatedAt,
     stale: false,
+    source: null,
   };
 }

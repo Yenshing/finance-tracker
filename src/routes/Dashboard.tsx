@@ -1,21 +1,77 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CATEGORIES } from '../domain/categories';
 import { formatCurrency } from '../lib/formatCurrency';
 import { useFxLatest, usePortfolio } from '../state/usePortfolio';
 import { useRefreshPrices } from '../state/useRefreshPrices';
-import AllocationTreemap from '../components/AllocationTreemap';
+import AllocationDonut, { type DonutSlice } from '../components/AllocationDonut';
 import CategoryCard from '../components/CategoryCard';
+import StockTreemap from '../components/StockTreemap';
+import {
+  INVESTMENT_BUCKETS,
+  bucketInvestmentTotals,
+} from '../domain/investmentBuckets';
+
+type ExpandableBucket = 'us_stock' | 'tw_stock';
+const EXPANDABLE: ReadonlySet<string> = new Set(['us_stock', 'tw_stock']);
 
 export default function Dashboard() {
   const portfolio = usePortfolio();
   const fx = useFxLatest();
   const { loading, errors, refresh } = useRefreshPrices();
+  const [expanded, setExpanded] = useState<ExpandableBucket | null>(null);
 
   if (!portfolio) {
     return <div className="text-sm text-gray-500">載入中…</div>;
   }
 
   const isEmpty = portfolio.assets.length === 0;
+
+  const categorySlices: DonutSlice[] = CATEGORIES.map((meta) => ({
+    key: meta.key,
+    name: meta.label,
+    value: portfolio.byCategory[meta.key],
+    color: meta.hex,
+  }));
+
+  const investmentTotals = bucketInvestmentTotals(portfolio.assets);
+  const investmentSlices: DonutSlice[] = INVESTMENT_BUCKETS.map((b) => ({
+    key: b.key,
+    name: b.label,
+    value: investmentTotals[b.key],
+    color: b.color,
+  }));
+
+  const usStockItems = portfolio.assets.filter(
+    (v) =>
+      v.asset.category === 'investment' &&
+      v.asset.type === 'stock' &&
+      v.asset.broker !== 'tw_broker',
+  );
+  const twStockItems = portfolio.assets.filter(
+    (v) =>
+      v.asset.category === 'investment' &&
+      v.asset.type === 'stock' &&
+      v.asset.broker === 'tw_broker',
+  );
+
+  const expandedMeta =
+    expanded === 'us_stock'
+      ? INVESTMENT_BUCKETS.find((b) => b.key === 'us_stock')!
+      : expanded === 'tw_stock'
+        ? INVESTMENT_BUCKETS.find((b) => b.key === 'tw_stock')!
+        : null;
+  const expandedItems =
+    expanded === 'us_stock'
+      ? usStockItems
+      : expanded === 'tw_stock'
+        ? twStockItems
+        : [];
+
+  function handleInvestmentSliceClick(key: string) {
+    if (!EXPANDABLE.has(key)) return;
+    setExpanded((prev) => (prev === key ? null : (key as ExpandableBucket)));
+  }
 
   return (
     <div className="space-y-6">
@@ -82,12 +138,32 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          <section>
-            <h2 className="mb-2 text-sm font-semibold text-gray-700">
-              資產配置（依市值）
-            </h2>
-            <AllocationTreemap assets={portfolio.assets} base={portfolio.base} />
+          <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <AllocationDonut
+              title="資產分類"
+              data={categorySlices}
+              base={portfolio.base}
+            />
+            <AllocationDonut
+              title="投資組合"
+              data={investmentSlices}
+              base={portfolio.base}
+              emptyMessage="尚無投資資料"
+              onSliceClick={handleInvestmentSliceClick}
+              isClickable={(key) => EXPANDABLE.has(key)}
+              selectedKey={expanded}
+            />
           </section>
+
+          {expandedMeta && (
+            <StockTreemap
+              title={expandedMeta.label}
+              color={expandedMeta.color}
+              items={expandedItems}
+              base={portfolio.base}
+              onClose={() => setExpanded(null)}
+            />
+          )}
 
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {CATEGORIES.map((meta) => (
