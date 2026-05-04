@@ -6,6 +6,7 @@ import AssetsList from './routes/AssetsList';
 import AssetForm from './routes/AssetForm';
 import Settings from './routes/Settings';
 import { ensureFreshFx } from './services/fx/erApiClient';
+import { takeSnapshot } from './domain/takeSnapshot';
 
 const navItems = [
   { to: '/', label: '總覽', end: true },
@@ -15,9 +16,18 @@ const navItems = [
 
 function App() {
   useEffect(() => {
-    ensureFreshFx().catch(() => {
-      /* silent — explicit refresh button covers errors */
-    });
+    (async () => {
+      try {
+        await ensureFreshFx();
+      } catch {
+        /* silent — explicit refresh button covers errors */
+      }
+      try {
+        await takeSnapshot('auto');
+      } catch {
+        /* silent */
+      }
+    })();
   }, []);
 
   return (

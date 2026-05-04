@@ -3,6 +3,7 @@ import { db } from '../db/database';
 import { fetchAndCacheMany } from '../services/prices/proxyClient';
 import { fetchAndCacheCryptos } from '../services/prices/coingeckoClient';
 import { fetchAndCacheFx } from '../services/fx/erApiClient';
+import { takeSnapshot } from '../domain/takeSnapshot';
 
 export interface RefreshState {
   loading: boolean;
@@ -28,6 +29,13 @@ export function useRefreshPrices() {
 
     const errors = [...stockErrors, ...cryptoErrors];
     if (!fxResult.ok) errors.push(`匯率：${fxResult.error ?? '失敗'}`);
+
+    // After fresh data lands in caches, refresh today's snapshot too.
+    try {
+      await takeSnapshot('auto');
+    } catch (e) {
+      errors.push(`快照：${(e as Error).message}`);
+    }
 
     setState({ loading: false, lastRunAt: Date.now(), errors });
   }

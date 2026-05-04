@@ -4,9 +4,14 @@ import { CATEGORIES } from '../domain/categories';
 import { formatCurrency } from '../lib/formatCurrency';
 import { useFxLatest, usePortfolio } from '../state/usePortfolio';
 import { useRefreshPrices } from '../state/useRefreshPrices';
+import { useSnapshots } from '../state/useSnapshots';
+import { takeSnapshot } from '../domain/takeSnapshot';
 import AllocationDonut, { type DonutSlice } from '../components/AllocationDonut';
 import CategoryCard from '../components/CategoryCard';
 import StockTreemap from '../components/StockTreemap';
+import NetWorthLineChart, {
+  type RangeKey,
+} from '../components/NetWorthLineChart';
 import {
   INVESTMENT_BUCKETS,
   bucketInvestmentTotals,
@@ -18,8 +23,17 @@ const EXPANDABLE: ReadonlySet<string> = new Set(['us_stock', 'tw_stock']);
 export default function Dashboard() {
   const portfolio = usePortfolio();
   const fx = useFxLatest();
+  const snapshots = useSnapshots();
   const { loading, errors, refresh } = useRefreshPrices();
   const [expanded, setExpanded] = useState<ExpandableBucket | null>(null);
+  const [range, setRange] = useState<RangeKey>('6M');
+  const [snapMessage, setSnapMessage] = useState<string | null>(null);
+
+  async function handleManualSnapshot() {
+    await takeSnapshot('manual');
+    setSnapMessage('已更新今日快照');
+    setTimeout(() => setSnapMessage(null), 2500);
+  }
 
   if (!portfolio) {
     return <div className="text-sm text-gray-500">載入中…</div>;
@@ -92,13 +106,29 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-        <button
-          onClick={refresh}
-          disabled={loading}
-          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-        >
-          {loading ? '更新中…' : '重新整理'}
-        </button>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={handleManualSnapshot}
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              title="把目前的淨資產記入今日快照（同一天會覆蓋）"
+            >
+              拍快照
+            </button>
+            <button
+              onClick={refresh}
+              disabled={loading}
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {loading ? '更新中…' : '重新整理'}
+            </button>
+          </div>
+          {snapMessage && (
+            <div className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
+              {snapMessage}
+            </div>
+          )}
+        </div>
       </header>
 
       {(portfolio.unconvertibleCount > 0 ||
@@ -164,6 +194,13 @@ export default function Dashboard() {
               onClose={() => setExpanded(null)}
             />
           )}
+
+          <NetWorthLineChart
+            snapshots={snapshots ?? []}
+            base={portfolio.base}
+            range={range}
+            onRangeChange={setRange}
+          />
 
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {CATEGORIES.map((meta) => (

@@ -49,7 +49,6 @@ export interface Snapshot {
   baseCurrency: string;
   totalNetWorth: number;
   byCategory: Record<Category, number>;
-  byAsset: Array<{ assetId: number; valueInBase: number }>;
   source: 'auto' | 'manual';
 }
 
