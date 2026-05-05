@@ -12,7 +12,7 @@ import {
 import clsx from 'clsx';
 import type { Snapshot } from '../db/types';
 import { CATEGORY_BY_KEY } from '../domain/categories';
-import { formatCurrency } from '../lib/formatCurrency';
+import { HIDDEN, useAmountsHidden, useFormatMoney } from '../state/useAmountFormat';
 
 export type RangeKey = '3M' | '6M' | '1Y' | '5Y' | 'ALL';
 
@@ -61,6 +61,8 @@ export default function NetWorthLineChart({
   range,
   onRangeChange,
 }: Props) {
+  const hidden = useAmountsHidden();
+  const fmt = useFormatMoney();
   const data = useMemo(() => {
     const matching = snapshots
       .filter((s) => s.baseCurrency === base)
@@ -127,7 +129,7 @@ export default function NetWorthLineChart({
               />
               <YAxis
                 tick={{ fontSize: 11, fill: '#9ca3af' }}
-                tickFormatter={(v: number) => compactNumber(v)}
+                tickFormatter={(v: number) => (hidden ? HIDDEN : compactNumber(v))}
                 width={56}
               />
               <Tooltip
@@ -137,7 +139,7 @@ export default function NetWorthLineChart({
                   border: '1px solid #e5e7eb',
                 }}
                 formatter={(v) =>
-                  typeof v === 'number' ? formatCurrency(v, base) : '—'
+                  typeof v === 'number' ? fmt(v, base) : '—'
                 }
                 labelFormatter={(d) => `${d}`}
               />

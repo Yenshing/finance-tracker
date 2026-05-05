@@ -1,5 +1,5 @@
 import type { CategoryMeta } from '../domain/categories';
-import { formatCurrency } from '../lib/formatCurrency';
+import { useFormatMoney } from '../state/useAmountFormat';
 
 interface Props {
   meta: CategoryMeta;
@@ -10,6 +10,7 @@ interface Props {
 }
 
 export default function CategoryCard({ meta, amount, base, totalAssets, count }: Props) {
+  const fmt = useFormatMoney();
   const pct = totalAssets > 0 ? (amount / totalAssets) * 100 : null;
 
   return (
@@ -19,7 +20,7 @@ export default function CategoryCard({ meta, amount, base, totalAssets, count }:
         <span className="text-sm font-medium text-gray-700">{meta.label}</span>
       </div>
       <div className="mt-2 text-xl font-semibold tabular-nums text-gray-900">
-        {formatCurrency(amount, base)}
+        {fmt(amount, base)}
       </div>
       <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
         <span>{count} 筆</span>

@@ -1,6 +1,10 @@
 import { Treemap, Tooltip, ResponsiveContainer } from 'recharts';
-import { formatCurrency } from '../lib/formatCurrency';
 import type { AssetView } from '../domain/portfolio';
+import {
+  HIDDEN,
+  useAmountsHidden,
+  useFormatMoney,
+} from '../state/useAmountFormat';
 
 interface Props {
   title: string;
@@ -23,6 +27,8 @@ interface Node {
 }
 
 export default function StockTreemap({ title, color, items, base, onClose }: Props) {
+  const hidden = useAmountsHidden();
+  const fmt = useFormatMoney();
   const visible = items
     .filter((v) => v.valueInBase !== null && v.valueInBase > 0)
     .sort((a, b) => (b.valueInBase ?? 0) - (a.valueInBase ?? 0));
@@ -51,7 +57,7 @@ export default function StockTreemap({ title, color, items, base, onClose }: Pro
         <span className="text-xs text-gray-400">{visible.length} 檔</span>
         <span className="ml-auto flex items-baseline gap-2">
           <span className="text-sm font-semibold tabular-nums text-gray-900">
-            {formatCurrency(total, base)}
+            {fmt(total, base)}
           </span>
           <button
             type="button"
@@ -88,14 +94,14 @@ export default function StockTreemap({ title, color, items, base, onClose }: Pro
                         <span className="font-semibold text-gray-900">{node.name}</span>
                       </div>
                       <div className="text-gray-500">
-                        {node.quantity} 股 · {node.pct.toFixed(1)}%
+                        {hidden ? HIDDEN : node.quantity} 股 · {node.pct.toFixed(1)}%
                       </div>
                       <div className="mt-1 text-gray-700">
-                        {formatCurrency(node.originalValue, node.currency)}
+                        {fmt(node.originalValue, node.currency)}
                         {node.currency !== base && (
                           <span className="text-gray-400">
                             {' '}
-                            ≈ {formatCurrency(node.size, base)}
+                            ≈ {fmt(node.size, base)}
                           </span>
                         )}
                       </div>

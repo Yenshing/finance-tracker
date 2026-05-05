@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { CATEGORY_BY_KEY, ASSET_TYPE_LABELS } from '../domain/categories';
@@ -6,13 +6,31 @@ import { BROKER_BY_CODE } from '../domain/brokers';
 import { CRYPTO_BY_ID } from '../domain/cryptos';
 import { INVESTMENT_BUCKETS } from '../domain/investmentBuckets';
 import { LIQUID_BUCKETS } from '../domain/liquidBuckets';
-import { formatCurrency } from '../lib/formatCurrency';
 import { assetsRepo } from '../db/repositories/assetsRepo';
 import { usePortfolio } from '../state/usePortfolio';
+import {
+  HIDDEN,
+  useAmountsHidden,
+  useFormatMoney,
+} from '../state/useAmountFormat';
 import type { AssetView } from '../domain/portfolio';
 
 type SortMode = 'value_desc' | 'name_asc';
 type UsBrokerFilter = 'all' | 'sub_broker' | 'overseas';
+
+const COLLAPSE_STORAGE_KEY = 'finance-tracker:assets-collapsed';
+
+function loadCollapsed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSE_STORAGE_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr.filter((s): s is string => typeof s === 'string'));
+  } catch {
+    return new Set();
+  }
+}
 
 const liquidMeta = CATEGORY_BY_KEY.liquid;
 const investmentMeta = CATEGORY_BY_KEY.investment;
@@ -41,7 +59,18 @@ export default function AssetsList() {
   const portfolio = usePortfolio();
   const [sort, setSort] = useState<SortMode>('value_desc');
   const [usBrokerFilter, setUsBrokerFilter] = useState<UsBrokerFilter>('all');
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        COLLAPSE_STORAGE_KEY,
+        JSON.stringify([...collapsed]),
+      );
+    } catch {
+      /* quota or storage disabled — silently ignore */
+    }
+  }, [collapsed]);
 
   if (!portfolio) {
     return <div className="text-sm text-gray-500">載入中…</div>;
@@ -89,6 +118,16 @@ export default function AssetsList() {
   const cryptos = sortItems(investmentItems.filter(isCrypto));
   const others = sortItems(investmentItems.filter(isOtherInvestment));
 
+  // Pre-compute totals per block so within-block percentages don't shift
+  // when a chip filter hides rows.
+  const liquidUsdTotal = totalOf(liquidUsd);
+  const liquidTwdTotal = totalOf(liquidTwd);
+  const usStocksTotal = totalOf(allUsStocks);
+  const twStocksTotal = totalOf(twStocks);
+  const cryptosTotal = totalOf(cryptos);
+  const othersTotal = totalOf(others);
+  const fixedTotal = totalOf(fixedItems);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -134,7 +173,7 @@ export default function AssetsList() {
                 color={LIQUID_BUCKET_BY_KEY.usd_cash!.color}
                 label={LIQUID_BUCKET_BY_KEY.usd_cash!.label}
                 count={liquidUsd.length}
-                total={totalOf(liquidUsd)}
+                total={liquidUsdTotal}
                 base={portfolio.base}
                 totalAssets={portfolio.totalAssets}
                 collapsed={isCollapsed('liquid_usd')}
@@ -144,7 +183,7 @@ export default function AssetsList() {
                 <AssetTable
                   items={liquidUsd}
                   base={portfolio.base}
-                  totalAssets={portfolio.totalAssets}
+                  blockTotal={liquidUsdTotal}
                 />
               </Block>
             )}
@@ -153,7 +192,7 @@ export default function AssetsList() {
                 color={LIQUID_BUCKET_BY_KEY.twd_cash!.color}
                 label={LIQUID_BUCKET_BY_KEY.twd_cash!.label}
                 count={liquidTwd.length}
-                total={totalOf(liquidTwd)}
+                total={liquidTwdTotal}
                 base={portfolio.base}
                 totalAssets={portfolio.totalAssets}
                 collapsed={isCollapsed('liquid_twd')}
@@ -163,7 +202,7 @@ export default function AssetsList() {
                 <AssetTable
                   items={liquidTwd}
                   base={portfolio.base}
-                  totalAssets={portfolio.totalAssets}
+                  blockTotal={liquidTwdTotal}
                 />
               </Block>
             )}
@@ -187,7 +226,7 @@ export default function AssetsList() {
                 color={BUCKET_BY_KEY.us_stock!.color}
                 label="美元股票"
                 count={allUsStocks.length}
-                total={totalOf(allUsStocks)}
+                total={usStocksTotal}
                 base={portfolio.base}
                 totalAssets={portfolio.totalAssets}
                 collapsed={isCollapsed('us_stock')}
@@ -206,7 +245,7 @@ export default function AssetsList() {
                   <AssetTable
                     items={visibleUsStocks}
                     base={portfolio.base}
-                    totalAssets={portfolio.totalAssets}
+                    blockTotal={usStocksTotal}
                   />
                 )}
               </Block>
@@ -216,7 +255,7 @@ export default function AssetsList() {
                 color={BUCKET_BY_KEY.tw_stock!.color}
                 label="台灣股票"
                 count={twStocks.length}
-                total={totalOf(twStocks)}
+                total={twStocksTotal}
                 base={portfolio.base}
                 totalAssets={portfolio.totalAssets}
                 collapsed={isCollapsed('tw_stock')}
@@ -226,7 +265,7 @@ export default function AssetsList() {
                 <AssetTable
                   items={twStocks}
                   base={portfolio.base}
-                  totalAssets={portfolio.totalAssets}
+                  blockTotal={twStocksTotal}
                 />
               </Block>
             )}
@@ -235,7 +274,7 @@ export default function AssetsList() {
                 color={BUCKET_BY_KEY.crypto!.color}
                 label="加密貨幣"
                 count={cryptos.length}
-                total={totalOf(cryptos)}
+                total={cryptosTotal}
                 base={portfolio.base}
                 totalAssets={portfolio.totalAssets}
                 collapsed={isCollapsed('crypto')}
@@ -245,7 +284,7 @@ export default function AssetsList() {
                 <AssetTable
                   items={cryptos}
                   base={portfolio.base}
-                  totalAssets={portfolio.totalAssets}
+                  blockTotal={cryptosTotal}
                 />
               </Block>
             )}
@@ -254,7 +293,7 @@ export default function AssetsList() {
                 color={BUCKET_BY_KEY.other!.color}
                 label="其他"
                 count={others.length}
-                total={totalOf(others)}
+                total={othersTotal}
                 base={portfolio.base}
                 totalAssets={portfolio.totalAssets}
                 collapsed={isCollapsed('other')}
@@ -264,7 +303,7 @@ export default function AssetsList() {
                 <AssetTable
                   items={others}
                   base={portfolio.base}
-                  totalAssets={portfolio.totalAssets}
+                  blockTotal={othersTotal}
                 />
               </Block>
             )}
@@ -278,7 +317,7 @@ export default function AssetsList() {
             color={fixedMeta.hex}
             label={fixedMeta.label}
             count={fixedItems.length}
-            total={totalOf(fixedItems)}
+            total={fixedTotal}
             base={portfolio.base}
             totalAssets={portfolio.totalAssets}
           />
@@ -286,7 +325,7 @@ export default function AssetsList() {
             <AssetTable
               items={fixedItems}
               base={portfolio.base}
-              totalAssets={portfolio.totalAssets}
+              blockTotal={fixedTotal}
             />
           </div>
         </section>
@@ -310,6 +349,7 @@ function TopLevelHeader({
   base: string;
   totalAssets: number;
 }) {
+  const fmt = useFormatMoney();
   const pct = totalAssets > 0 ? (total / totalAssets) * 100 : null;
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-gray-200 pb-2">
@@ -321,7 +361,7 @@ function TopLevelHeader({
       <span className="text-sm text-gray-400">{count} 筆</span>
       <span className="ml-auto flex items-baseline gap-2">
         <span className="text-xl font-semibold tabular-nums text-gray-900">
-          {formatCurrency(total, base)}
+          {fmt(total, base)}
         </span>
         {pct !== null && (
           <span className="text-base tabular-nums text-gray-500">
@@ -358,6 +398,7 @@ function Block({
   indent?: boolean;
   children: React.ReactNode;
 }) {
+  const fmt = useFormatMoney();
   const pct = totalAssets > 0 ? (total / totalAssets) * 100 : null;
   return (
     <section className={clsx(indent && 'pl-3')}>
@@ -390,7 +431,7 @@ function Block({
         )}
         <span className="ml-auto flex items-baseline gap-2 pr-1">
           <span className="text-sm font-semibold tabular-nums text-gray-900">
-            {formatCurrency(total, base)}
+            {fmt(total, base)}
           </span>
           {pct !== null && (
             <span className="text-xs tabular-nums text-gray-500">
@@ -468,11 +509,11 @@ function UsBrokerChips({
 function AssetTable({
   items,
   base,
-  totalAssets,
+  blockTotal,
 }: {
   items: AssetView[];
   base: string;
-  totalAssets: number;
+  blockTotal: number;
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
@@ -483,7 +524,7 @@ function AssetTable({
             <th className="px-4 py-2">明細</th>
             <th className="px-4 py-2 text-right">原幣金額</th>
             <th className="px-4 py-2 text-right">換算</th>
-            <th className="px-4 py-2 text-right">佔比</th>
+            <th className="px-4 py-2 text-right">區內佔比</th>
             <th className="px-4 py-2"></th>
           </tr>
         </thead>
@@ -493,7 +534,7 @@ function AssetTable({
               key={view.asset.id}
               view={view}
               base={base}
-              totalAssets={totalAssets}
+              blockTotal={blockTotal}
             />
           ))}
         </tbody>
@@ -505,20 +546,22 @@ function AssetTable({
 function AssetRow({
   view,
   base,
-  totalAssets,
+  blockTotal,
 }: {
   view: AssetView;
   base: string;
-  totalAssets: number;
+  blockTotal: number;
 }) {
+  const fmt = useFormatMoney();
+  const hidden = useAmountsHidden();
   const { asset, valueInAssetCurrency, valueInBase, pricedAt, stale, source } = view;
   const isStock = asset.type === 'stock' && asset.symbol;
   const isCryptoRow = asset.type === 'crypto' && asset.symbol;
   const broker = asset.broker ? BROKER_BY_CODE[asset.broker] : null;
   const crypto = isCryptoRow ? CRYPTO_BY_ID[asset.symbol!] : null;
   const pct =
-    valueInBase !== null && totalAssets > 0
-      ? (valueInBase / totalAssets) * 100
+    valueInBase !== null && blockTotal > 0
+      ? (valueInBase / blockTotal) * 100
       : null;
 
   async function handleDelete() {
@@ -541,11 +584,11 @@ function AssetRow({
           )}
         </div>
         <div>
-          {asset.quantity} 股
-          {valueInAssetCurrency > 0 && asset.quantity ? (
+          {hidden ? HIDDEN : asset.quantity} 股
+          {!hidden && valueInAssetCurrency > 0 && asset.quantity ? (
             <>
               {' × '}
-              {formatCurrency(valueInAssetCurrency / asset.quantity, asset.currency)}
+              {fmt(valueInAssetCurrency / asset.quantity, asset.currency)}
             </>
           ) : null}
         </div>
@@ -565,11 +608,11 @@ function AssetRow({
           <span className="font-mono">{crypto?.symbol ?? asset.symbol}</span>
         </div>
         <div>
-          {asset.quantity}
-          {valueInAssetCurrency > 0 && asset.quantity ? (
+          {hidden ? HIDDEN : asset.quantity}
+          {!hidden && valueInAssetCurrency > 0 && asset.quantity ? (
             <>
               {' × '}
-              {formatCurrency(valueInAssetCurrency / asset.quantity, 'USD')}
+              {fmt(valueInAssetCurrency / asset.quantity, 'USD')}
             </>
           ) : null}
         </div>
@@ -595,7 +638,7 @@ function AssetRow({
       </td>
       <td className="px-4 py-3 align-top">{detail}</td>
       <td className="px-4 py-3 align-top text-right tabular-nums">
-        {formatCurrency(valueInAssetCurrency, asset.currency)}
+        {fmt(valueInAssetCurrency, asset.currency)}
       </td>
       <td className="px-4 py-3 align-top text-right tabular-nums text-gray-600">
         {valueInBase === null ? (
@@ -603,7 +646,7 @@ function AssetRow({
         ) : asset.currency === base ? (
           <span className="text-gray-300">—</span>
         ) : (
-          formatCurrency(valueInBase, base)
+          fmt(valueInBase, base)
         )}
       </td>
       <td className="px-4 py-3 align-top text-right tabular-nums text-gray-600">
