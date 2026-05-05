@@ -7,6 +7,7 @@ import AssetForm from './routes/AssetForm';
 import Settings from './routes/Settings';
 import { ensureFreshFx } from './services/fx/erApiClient';
 import { takeSnapshot } from './domain/takeSnapshot';
+import { useUiStore } from './state/uiPreferences';
 
 const navItems = [
   { to: '/', label: '總覽', end: true },
@@ -15,6 +16,9 @@ const navItems = [
 ];
 
 function App() {
+  const amountsHidden = useUiStore((s) => s.amountsHidden);
+  const toggleAmountsHidden = useUiStore((s) => s.toggleAmountsHidden);
+
   useEffect(() => {
     (async () => {
       try {
@@ -54,6 +58,15 @@ function App() {
               </NavLink>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={toggleAmountsHidden}
+            title={amountsHidden ? '顯示金額' : '隱藏金額'}
+            aria-label={amountsHidden ? '顯示金額' : '隱藏金額'}
+            className="ml-auto rounded-md p-1.5 text-gray-600 hover:bg-gray-100"
+          >
+            {amountsHidden ? <EyeOffIcon /> : <EyeIcon />}
+          </button>
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
@@ -66,6 +79,46 @@ function App() {
         </Routes>
       </main>
     </div>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9.88 5.09A10.94 10.94 0 0 1 12 5c6.5 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+      <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3.5 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+      <path d="M14.12 14.12A3 3 0 1 1 9.88 9.88" />
+      <line x1="2" y1="2" x2="22" y2="22" />
+    </svg>
   );
 }
 

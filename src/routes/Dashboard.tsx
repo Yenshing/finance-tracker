@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CATEGORIES } from '../domain/categories';
-import { formatCurrency } from '../lib/formatCurrency';
+import { useFormatMoney } from '../state/useAmountFormat';
 import { useFxLatest, usePortfolio } from '../state/usePortfolio';
 import { useRefreshPrices } from '../state/useRefreshPrices';
 import { useSnapshots } from '../state/useSnapshots';
@@ -24,6 +24,7 @@ export default function Dashboard() {
   const portfolio = usePortfolio();
   const fx = useFxLatest();
   const snapshots = useSnapshots();
+  const fmt = useFormatMoney();
   const { loading, errors, refresh } = useRefreshPrices();
   const [expanded, setExpanded] = useState<ExpandableBucket | null>(null);
   const [range, setRange] = useState<RangeKey>('6M');
@@ -93,10 +94,10 @@ export default function Dashboard() {
         <div>
           <div className="text-sm text-gray-500">淨資產</div>
           <div className="mt-1 text-4xl font-semibold tabular-nums text-gray-900">
-            {formatCurrency(portfolio.netWorth, portfolio.base)}
+            {fmt(portfolio.netWorth, portfolio.base)}
           </div>
           <div className="mt-1 text-xs text-gray-500">
-            總資產 {formatCurrency(portfolio.totalAssets, portfolio.base)}
+            總資產 {fmt(portfolio.totalAssets, portfolio.base)}
           </div>
           {fx && (
             <div className="mt-1 text-xs text-gray-400">

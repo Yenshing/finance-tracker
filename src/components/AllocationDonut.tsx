@@ -1,6 +1,6 @@
 import { Cell, Pie, PieChart, Tooltip } from 'recharts';
 import clsx from 'clsx';
-import { formatCurrency } from '../lib/formatCurrency';
+import { useFormatMoney } from '../state/useAmountFormat';
 
 const CHART_SIZE = 176;
 
@@ -30,6 +30,7 @@ export default function AllocationDonut({
   isClickable,
   selectedKey,
 }: Props) {
+  const fmt = useFormatMoney();
   const total = data.reduce((s, d) => s + d.value, 0);
   const slices = data.filter((d) => d.value > 0);
 
@@ -98,7 +99,7 @@ export default function AllocationDonut({
                       <div className="rounded-md border border-gray-200 bg-white px-3 py-2 text-xs shadow-md">
                         <div className="font-semibold text-gray-900">{slice.name}</div>
                         <div className="text-gray-700">
-                          {formatCurrency(slice.value, base)}
+                          {fmt(slice.value, base)}
                           <span className="ml-1 text-gray-400">
                             ({pct.toFixed(1)}%)
                           </span>
@@ -111,7 +112,7 @@ export default function AllocationDonut({
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <div className="text-[10px] text-gray-400">合計</div>
                 <div className="text-sm font-semibold tabular-nums text-gray-900">
-                  {formatCurrency(total, base)}
+                  {fmt(total, base)}
                 </div>
               </div>
             </>
@@ -143,7 +144,7 @@ export default function AllocationDonut({
                   {pct.toFixed(1)}%
                 </span>
                 <span className="w-24 text-right tabular-nums text-gray-900">
-                  {formatCurrency(d.value, base)}
+                  {fmt(d.value, base)}
                 </span>
               </li>
             );
