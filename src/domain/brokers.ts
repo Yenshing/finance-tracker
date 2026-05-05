@@ -7,8 +7,6 @@ export interface BrokerMeta {
   market: Market;
   currency: string;
   hint: string;
-  /** True until backend pricing for this broker's market is implemented. */
-  pricingNotYetSupported?: boolean;
 }
 
 export const BROKERS: BrokerMeta[] = [
@@ -32,7 +30,6 @@ export const BROKERS: BrokerMeta[] = [
     market: 'TW',
     currency: 'TWD',
     hint: '例：2330',
-    pricingNotYetSupported: true,
   },
 ];
 

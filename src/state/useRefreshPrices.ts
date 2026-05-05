@@ -46,13 +46,7 @@ export function useRefreshPrices() {
 async function refreshStockPrices(): Promise<string[]> {
   const assets = await db.assets.toArray();
   const symbols = assets
-    .filter(
-      (a) =>
-        !a.archivedAt &&
-        a.type === 'stock' &&
-        a.symbol &&
-        !a.symbol.endsWith('.TW'),
-    )
+    .filter((a) => !a.archivedAt && a.type === 'stock' && a.symbol)
     .map((a) => a.symbol!);
   if (symbols.length === 0) return [];
   const results = await fetchAndCacheMany(symbols);
