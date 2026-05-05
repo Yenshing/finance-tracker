@@ -52,8 +52,22 @@ export interface Snapshot {
   source: 'auto' | 'manual';
 }
 
+export interface LinkedFileMeta {
+  /** Persisted FileSystemFileHandle. Survives reload via IndexedDB structured-clone. */
+  handle: FileSystemFileHandle;
+  /** Display name shown in UI. */
+  name: string;
+  /** When the user first picked this file. */
+  linkedAt: number;
+  /** Last time we wrote DB state to the file. */
+  lastWriteAt: number;
+  /** The `exportedAt` value of the last bundle we wrote — used for reconciliation. */
+  lastWriteExportedAt: number;
+}
+
 export interface SettingsRow {
   key: 'app';
   baseCurrency: string;
   lastAutoSnapshotDate?: string;
+  linkedFile?: LinkedFileMeta;
 }

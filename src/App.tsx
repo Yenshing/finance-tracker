@@ -5,9 +5,11 @@ import Dashboard from './routes/Dashboard';
 import AssetsList from './routes/AssetsList';
 import AssetForm from './routes/AssetForm';
 import Settings from './routes/Settings';
+import FileSyncBanner from './components/FileSyncBanner';
 import { ensureFreshFx } from './services/fx/erApiClient';
 import { takeSnapshot } from './domain/takeSnapshot';
 import { useUiStore } from './state/uiPreferences';
+import { FileSyncProvider } from './state/useFileSync';
 
 const navItems = [
   { to: '/', label: '總覽', end: true },
@@ -35,50 +37,53 @@ function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/80 backdrop-blur">
-        <nav className="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3">
-          <span className="text-lg font-semibold tracking-tight">資產盤點</span>
-          <div className="flex gap-1">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  clsx(
-                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-gray-900 text-white'
-                      : 'text-gray-600 hover:bg-gray-100',
-                  )
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={toggleAmountsHidden}
-            title={amountsHidden ? '顯示金額' : '隱藏金額'}
-            aria-label={amountsHidden ? '顯示金額' : '隱藏金額'}
-            className="ml-auto rounded-md p-1.5 text-gray-600 hover:bg-gray-100"
-          >
-            {amountsHidden ? <EyeOffIcon /> : <EyeIcon />}
-          </button>
-        </nav>
-      </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/assets" element={<AssetsList />} />
-          <Route path="/assets/new" element={<AssetForm />} />
-          <Route path="/assets/:id/edit" element={<AssetForm />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </main>
-    </div>
+    <FileSyncProvider>
+      <div className="min-h-screen bg-gray-50 text-gray-900">
+        <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/80 backdrop-blur">
+          <nav className="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3">
+            <span className="text-lg font-semibold tracking-tight">資產盤點</span>
+            <div className="flex gap-1">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    clsx(
+                      'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-gray-900 text-white'
+                        : 'text-gray-600 hover:bg-gray-100',
+                    )
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={toggleAmountsHidden}
+              title={amountsHidden ? '顯示金額' : '隱藏金額'}
+              aria-label={amountsHidden ? '顯示金額' : '隱藏金額'}
+              className="ml-auto rounded-md p-1.5 text-gray-600 hover:bg-gray-100"
+            >
+              {amountsHidden ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
+          </nav>
+          <FileSyncBanner />
+        </header>
+        <main className="mx-auto max-w-5xl px-4 py-6">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/assets" element={<AssetsList />} />
+            <Route path="/assets/new" element={<AssetForm />} />
+            <Route path="/assets/:id/edit" element={<AssetForm />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </main>
+      </div>
+    </FileSyncProvider>
   );
 }
 

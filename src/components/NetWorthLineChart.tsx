@@ -111,7 +111,7 @@ export default function NetWorthLineChart({
       {data.length === 0 ? (
         <div className="flex h-56 items-center justify-center text-xs text-gray-400">
           {snapshots.length === 0
-            ? '尚無歷史資料。每天打開 App、或按「重新整理」會自動拍快照。'
+            ? '尚無歷史資料。每天打開 App、或按「更新報價」會自動拍快照。'
             : '此區間內沒有資料'}
         </div>
       ) : (

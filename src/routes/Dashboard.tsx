@@ -5,7 +5,6 @@ import { useFormatMoney } from '../state/useAmountFormat';
 import { useFxLatest, usePortfolio } from '../state/usePortfolio';
 import { useRefreshPrices } from '../state/useRefreshPrices';
 import { useSnapshots } from '../state/useSnapshots';
-import { takeSnapshot } from '../domain/takeSnapshot';
 import AllocationDonut, { type DonutSlice } from '../components/AllocationDonut';
 import CategoryCard from '../components/CategoryCard';
 import StockTreemap from '../components/StockTreemap';
@@ -28,13 +27,6 @@ export default function Dashboard() {
   const { loading, errors, refresh } = useRefreshPrices();
   const [expanded, setExpanded] = useState<ExpandableBucket | null>(null);
   const [range, setRange] = useState<RangeKey>('6M');
-  const [snapMessage, setSnapMessage] = useState<string | null>(null);
-
-  async function handleManualSnapshot() {
-    await takeSnapshot('manual');
-    setSnapMessage('已更新今日快照');
-    setTimeout(() => setSnapMessage(null), 2500);
-  }
 
   if (!portfolio) {
     return <div className="text-sm text-gray-500">載入中…</div>;
@@ -107,29 +99,14 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex gap-2">
-            <button
-              onClick={handleManualSnapshot}
-              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              title="把目前的淨資產記入今日快照（同一天會覆蓋）"
-            >
-              拍快照
-            </button>
-            <button
-              onClick={refresh}
-              disabled={loading}
-              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            >
-              {loading ? '更新中…' : '重新整理'}
-            </button>
-          </div>
-          {snapMessage && (
-            <div className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
-              {snapMessage}
-            </div>
-          )}
-        </div>
+        <button
+          onClick={refresh}
+          disabled={loading}
+          title="重新抓取股票、加密貨幣與匯率"
+          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {loading ? '更新中…' : '更新報價'}
+        </button>
       </header>
 
       {(portfolio.unconvertibleCount > 0 ||
@@ -138,7 +115,7 @@ export default function Dashboard() {
         <div className="space-y-1 text-xs">
           {portfolio.unconvertibleCount > 0 && (
             <div className="inline-block rounded bg-amber-100 px-2 py-1 text-amber-800">
-              有 {portfolio.unconvertibleCount} 筆資產缺少匯率資料未計入。請按「重新整理」。
+              有 {portfolio.unconvertibleCount} 筆資產缺少匯率資料未計入。請按「更新報價」。
             </div>
           )}
           {portfolio.staleCount > 0 && (
