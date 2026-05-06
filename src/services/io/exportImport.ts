@@ -58,15 +58,27 @@ export const ExportFileSchema = z.object({
 export type ExportFile = z.infer<typeof ExportFileSchema>;
 
 export async function exportAll(): Promise<ExportFile> {
-  const [assets, snapshots, settings] = await Promise.all([
+  const [assets, snapshots, rawSettings] = await Promise.all([
     db.assets.toArray(),
     db.snapshots.toArray(),
     db.settings.get('app'),
   ]);
+  // Strip non-serializable / machine-local fields (e.g. linkedFile holds a
+  // FileSystemFileHandle that doesn't survive JSON round-trips and is
+  // intentionally not portable across machines).
+  const settings = rawSettings
+    ? {
+        key: rawSettings.key,
+        baseCurrency: rawSettings.baseCurrency,
+        ...(rawSettings.lastAutoSnapshotDate !== undefined && {
+          lastAutoSnapshotDate: rawSettings.lastAutoSnapshotDate,
+        }),
+      }
+    : null;
   return {
     version: EXPORT_VERSION,
     exportedAt: Date.now(),
-    settings: settings ?? null,
+    settings,
     assets,
     snapshots,
   };
@@ -87,6 +99,11 @@ export async function replaceAll(file: ExportFile): Promise<ImportSummary> {
     'rw',
     [db.assets, db.snapshots, db.settings, db.priceCache, db.fxCache],
     async () => {
+      // Preserve the local machine's linked-file metadata across import — it
+      // is intentionally not part of the portable export.
+      const existing = await db.settings.get('app');
+      const linkedFile = existing?.linkedFile;
+
       await db.assets.clear();
       await db.snapshots.clear();
       await db.settings.clear();
@@ -94,7 +111,15 @@ export async function replaceAll(file: ExportFile): Promise<ImportSummary> {
       await db.priceCache.clear();
       await db.fxCache.clear();
 
-      if (file.settings) await db.settings.put(file.settings);
+      if (file.settings) {
+        await db.settings.put({ ...file.settings, linkedFile });
+      } else if (linkedFile) {
+        await db.settings.put({
+          key: 'app',
+          baseCurrency: 'TWD',
+          linkedFile,
+        });
+      }
       if (file.assets.length) await db.assets.bulkAdd(file.assets);
       if (file.snapshots.length) await db.snapshots.bulkAdd(file.snapshots);
     },

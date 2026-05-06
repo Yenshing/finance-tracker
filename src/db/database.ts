@@ -6,6 +6,7 @@ import type {
   SettingsRow,
   Snapshot,
 } from './types';
+import { notifyDataChange } from '../services/io/changeTracker';
 
 export class AppDB extends Dexie {
   assets!: Table<Asset, number>;
@@ -27,3 +28,17 @@ export class AppDB extends Dexie {
 }
 
 export const db = new AppDB();
+
+// Notify subscribers (e.g. file sync) of any change to user data.
+// Cache tables are excluded — they're regenerable and not part of the backup file.
+for (const table of [db.assets, db.snapshots, db.settings]) {
+  table.hook('creating', () => {
+    notifyDataChange();
+  });
+  table.hook('updating', () => {
+    notifyDataChange();
+  });
+  table.hook('deleting', () => {
+    notifyDataChange();
+  });
+}
