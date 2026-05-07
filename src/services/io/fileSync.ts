@@ -9,6 +9,7 @@
  */
 
 import { settingsRepo } from '../../db/repositories/settingsRepo';
+import { DEFAULT_USER_ID, getActiveUser } from '../../state/userRegistry';
 import { mute } from './changeTracker';
 import {
   exportAll,
@@ -64,6 +65,18 @@ export function isFileSyncSupported(): boolean {
   );
 }
 
+function suggestedFileName(): string {
+  const user = getActiveUser();
+  if (user.id === DEFAULT_USER_ID) return 'finance-tracker.json';
+  const slug =
+    user.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9一-鿿]+/g, '-')
+      .replace(/^-+|-+$/g, '') || user.id.slice(0, 8);
+  return `finance-tracker-${slug}.json`;
+}
+
 /** Either pick an existing JSON file (open) or create a new one (save). */
 export async function pickAndLink(mode: 'open' | 'save'): Promise<FileSystemFileHandle | null> {
   if (!isFileSyncSupported()) {
@@ -74,7 +87,7 @@ export async function pickAndLink(mode: 'open' | 'save'): Promise<FileSystemFile
       mode === 'open'
         ? (await window.showOpenFilePicker!({ multiple: false, types: FILE_TYPES }))[0]
         : await window.showSaveFilePicker!({
-            suggestedName: 'finance-tracker.json',
+            suggestedName: suggestedFileName(),
             types: FILE_TYPES,
           });
     return handle;
