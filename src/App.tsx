@@ -6,6 +6,7 @@ import AssetsList from './routes/AssetsList';
 import AssetForm from './routes/AssetForm';
 import Settings from './routes/Settings';
 import FileSyncBanner from './components/FileSyncBanner';
+import UserSwitcher from './components/UserSwitcher';
 import { ensureFreshFx } from './services/fx/erApiClient';
 import { takeSnapshot } from './domain/takeSnapshot';
 import { useUiStore } from './state/uiPreferences';
@@ -61,15 +62,18 @@ function App() {
                 </NavLink>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={toggleAmountsHidden}
-              title={amountsHidden ? '顯示金額' : '隱藏金額'}
-              aria-label={amountsHidden ? '顯示金額' : '隱藏金額'}
-              className="ml-auto rounded-md p-1.5 text-gray-600 hover:bg-gray-100"
-            >
-              {amountsHidden ? <EyeOffIcon /> : <EyeIcon />}
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <UserSwitcher />
+              <button
+                type="button"
+                onClick={toggleAmountsHidden}
+                title={amountsHidden ? '顯示金額' : '隱藏金額'}
+                aria-label={amountsHidden ? '顯示金額' : '隱藏金額'}
+                className="rounded-md p-1.5 text-gray-600 hover:bg-gray-100"
+              >
+                {amountsHidden ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </nav>
           <FileSyncBanner />
         </header>
