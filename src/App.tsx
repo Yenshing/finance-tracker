@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import Dashboard from './routes/Dashboard';
 import AssetsList from './routes/AssetsList';
 import AssetForm from './routes/AssetForm';
+import HealthCheck from './routes/HealthCheck';
 import Settings from './routes/Settings';
 import FileSyncBanner from './components/FileSyncBanner';
 import UserSwitcher from './components/UserSwitcher';
@@ -15,6 +16,7 @@ import { FileSyncProvider } from './state/useFileSync';
 const navItems = [
   { to: '/', label: '總覽', end: true },
   { to: '/assets', label: '資產', end: false },
+  { to: '/check', label: '健檢', end: false },
   { to: '/settings', label: '設定', end: false },
 ];
 
@@ -83,6 +85,7 @@ function App() {
             <Route path="/assets" element={<AssetsList />} />
             <Route path="/assets/new" element={<AssetForm />} />
             <Route path="/assets/:id/edit" element={<AssetForm />} />
+            <Route path="/check" element={<HealthCheck />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
