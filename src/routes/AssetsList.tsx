@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { CATEGORY_BY_KEY, ASSET_TYPE_LABELS } from '../domain/categories';
@@ -7,6 +9,11 @@ import { CRYPTO_BY_ID } from '../domain/cryptos';
 import { INVESTMENT_BUCKETS } from '../domain/investmentBuckets';
 import { LIQUID_BUCKETS } from '../domain/liquidBuckets';
 import { assetsRepo } from '../db/repositories/assetsRepo';
+import { db } from '../db/database';
+import { deleteInvestmentWithCredit } from '../domain/cashAdjustment';
+import AmountInput from '../components/AmountInput';
+import { formatCurrency } from '../lib/formatCurrency';
+import { parseAmount } from '../lib/parseAmount';
 import { usePortfolio } from '../state/usePortfolio';
 import {
   HIDDEN,
@@ -14,6 +21,7 @@ import {
   useFormatMoney,
 } from '../state/useAmountFormat';
 import type { AssetView } from '../domain/portfolio';
+import type { Asset } from '../db/types';
 
 type SortMode = 'value_desc' | 'name_asc';
 type UsBrokerFilter = 'all' | 'sub_broker' | 'overseas';
@@ -60,6 +68,12 @@ export default function AssetsList() {
   const [sort, setSort] = useState<SortMode>('value_desc');
   const [usBrokerFilter, setUsBrokerFilter] = useState<UsBrokerFilter>('all');
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
+  const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
+
+  const liquidAccounts = useLiveQuery(async () => {
+    const all = await db.assets.toArray();
+    return all.filter((a) => !a.archivedAt && a.category === 'liquid');
+  });
 
   useEffect(() => {
     try {
@@ -74,6 +88,17 @@ export default function AssetsList() {
 
   if (!portfolio) {
     return <div className="text-sm text-gray-500">載入中…</div>;
+  }
+
+  async function requestDelete(asset: Asset) {
+    if (!asset.id) return;
+    if (asset.category === 'investment') {
+      setDeleteTarget(asset);
+      return;
+    }
+    const cat = CATEGORY_BY_KEY[asset.category].label;
+    if (!confirm(`確定要刪除「${asset.name}」(${cat}) 嗎？`)) return;
+    await assetsRepo.remove(asset.id);
   }
 
   const isCollapsed = (id: string) => collapsed.has(id);
@@ -184,6 +209,7 @@ export default function AssetsList() {
                   items={liquidUsd}
                   base={portfolio.base}
                   blockTotal={liquidUsdTotal}
+                  onDelete={requestDelete}
                 />
               </Block>
             )}
@@ -203,6 +229,7 @@ export default function AssetsList() {
                   items={liquidTwd}
                   base={portfolio.base}
                   blockTotal={liquidTwdTotal}
+                  onDelete={requestDelete}
                 />
               </Block>
             )}
@@ -246,6 +273,7 @@ export default function AssetsList() {
                     items={visibleUsStocks}
                     base={portfolio.base}
                     blockTotal={usStocksTotal}
+                    onDelete={requestDelete}
                   />
                 )}
               </Block>
@@ -266,6 +294,7 @@ export default function AssetsList() {
                   items={twStocks}
                   base={portfolio.base}
                   blockTotal={twStocksTotal}
+                  onDelete={requestDelete}
                 />
               </Block>
             )}
@@ -285,6 +314,7 @@ export default function AssetsList() {
                   items={cryptos}
                   base={portfolio.base}
                   blockTotal={cryptosTotal}
+                  onDelete={requestDelete}
                 />
               </Block>
             )}
@@ -304,6 +334,7 @@ export default function AssetsList() {
                   items={others}
                   base={portfolio.base}
                   blockTotal={othersTotal}
+                  onDelete={requestDelete}
                 />
               </Block>
             )}
@@ -326,9 +357,18 @@ export default function AssetsList() {
               items={fixedItems}
               base={portfolio.base}
               blockTotal={fixedTotal}
+              onDelete={requestDelete}
             />
           </div>
         </section>
+      )}
+
+      {deleteTarget && (
+        <DeleteInvestmentModal
+          asset={deleteTarget}
+          liquidAccounts={liquidAccounts ?? []}
+          onClose={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );
@@ -510,10 +550,12 @@ function AssetTable({
   items,
   base,
   blockTotal,
+  onDelete,
 }: {
   items: AssetView[];
   base: string;
   blockTotal: number;
+  onDelete: (asset: Asset) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
@@ -535,6 +577,7 @@ function AssetTable({
               view={view}
               base={base}
               blockTotal={blockTotal}
+              onDelete={onDelete}
             />
           ))}
         </tbody>
@@ -547,10 +590,12 @@ function AssetRow({
   view,
   base,
   blockTotal,
+  onDelete,
 }: {
   view: AssetView;
   base: string;
   blockTotal: number;
+  onDelete: (asset: Asset) => void;
 }) {
   const fmt = useFormatMoney();
   const hidden = useAmountsHidden();
@@ -563,13 +608,6 @@ function AssetRow({
     valueInBase !== null && blockTotal > 0
       ? (valueInBase / blockTotal) * 100
       : null;
-
-  async function handleDelete() {
-    if (!asset.id) return;
-    const cat = CATEGORY_BY_KEY[asset.category].label;
-    if (!confirm(`確定要刪除「${asset.name}」(${cat}) 嗎？`)) return;
-    await assetsRepo.remove(asset.id);
-  }
 
   let detail: React.ReactNode;
   if (isStock) {
@@ -660,12 +698,169 @@ function AssetRow({
           編輯
         </Link>
         <button
-          onClick={handleDelete}
+          onClick={() => onDelete(asset)}
           className="text-sm text-red-600 hover:text-red-700"
         >
           刪除
         </button>
       </td>
     </tr>
+  );
+}
+
+
+interface DeleteModalProps {
+  asset: Asset;
+  liquidAccounts: Asset[];
+  onClose: () => void;
+}
+
+function DeleteInvestmentModal({
+  asset,
+  liquidAccounts,
+  onClose,
+}: DeleteModalProps) {
+  const [enableCredit, setEnableCredit] = useState(false);
+  const [accountId, setAccountId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const matching = useMemo(
+    () => liquidAccounts.filter((a) => a.currency === asset.currency),
+    [liquidAccounts, asset.currency],
+  );
+
+  const numericAmount = parseAmount(amount);
+  const selected =
+    accountId && matching.find((a) => String(a.id) === accountId);
+  const balanceAfter =
+    selected && numericAmount !== null
+      ? (selected.manualValue ?? 0) + numericAmount
+      : null;
+
+  async function handleConfirm() {
+    if (!asset.id) return;
+    setBusy(true);
+    try {
+      let cashAdjustment;
+      if (enableCredit) {
+        const accId = Number(accountId);
+        if (!Number.isInteger(accId) || accId <= 0) {
+          alert("請選擇入帳帳戶");
+          setBusy(false);
+          return;
+        }
+        if (numericAmount === null || numericAmount <= 0) {
+          alert("請輸入有效的入帳金額");
+          setBusy(false);
+          return;
+        }
+        cashAdjustment = { accountId: accId, amount: numericAmount };
+      }
+      await deleteInvestmentWithCredit({
+        assetIdToDelete: asset.id,
+        cashAdjustment,
+      });
+      onClose();
+    } catch (e) {
+      alert(`刪除失敗：${(e as Error).message}`);
+      setBusy(false);
+    }
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4"
+      onClick={busy ? undefined : onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="mb-3">
+          <h2 className="text-lg font-semibold text-gray-900">
+            刪除「{asset.name}」？
+          </h2>
+          <p className="mt-1 text-xs text-gray-500">
+            這個動作通常代表你已賣出或結清部位。可選擇把賣出所得加回流動資金。
+          </p>
+        </header>
+
+        {matching.length > 0 ? (
+          <div className="space-y-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+            <label className="flex items-center gap-2 text-sm text-gray-800">
+              <input
+                type="checkbox"
+                checked={enableCredit}
+                onChange={(e) => setEnableCredit(e.target.checked)}
+              />
+              <span>同時將賣出所得加回流動資金</span>
+            </label>
+            {enableCredit && (
+              <>
+                <label className="block">
+                  <div className="mb-1 text-xs font-medium text-gray-700">
+                    入帳帳戶
+                  </div>
+                  <select
+                    value={accountId}
+                    onChange={(e) => setAccountId(e.target.value)}
+                    className="select"
+                  >
+                    <option value="">— 請選擇 —</option>
+                    {matching.map((a) => (
+                      <option key={a.id} value={String(a.id)}>
+                        {a.name}（餘額{" "}
+                        {formatCurrency(a.manualValue ?? 0, a.currency)}）
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <div className="mb-1 text-xs font-medium text-gray-700">
+                    入帳金額（{asset.currency}）
+                  </div>
+                  <AmountInput
+                    value={amount}
+                    onChange={setAmount}
+                    placeholder="從交割單抄入，已扣手續費後的實收"
+                    unit={asset.currency}
+                  />
+                </label>
+                {balanceAfter !== null && (
+                  <div className="text-xs text-gray-500">
+                    入帳後餘額：{formatCurrency(balanceAfter, asset.currency)}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ) : (
+          <p className="rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            尚無 {asset.currency} 流動資金帳戶可供入帳；可直接刪除。
+          </p>
+        )}
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-md px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleConfirm()}
+            disabled={busy}
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {busy ? "處理中…" : "刪除"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

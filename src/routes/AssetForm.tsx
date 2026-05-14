@@ -1,12 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { Asset, AssetType, Broker, Category } from '../db/types';
 import { assetsRepo } from '../db/repositories/assetsRepo';
 import { settingsRepo } from '../db/repositories/settingsRepo';
+import { db } from '../db/database';
 import { ASSET_TYPE_LABELS, CATEGORIES } from '../domain/categories';
 import { BROKERS, BROKER_BY_CODE } from '../domain/brokers';
 import { CRYPTOS, CRYPTO_BY_ID } from '../domain/cryptos';
+import {
+  createInvestmentWithDeduction,
+  updateInvestmentWithAdjustment,
+  type AdjustmentDirection,
+} from '../domain/cashAdjustment';
 import { SUPPORTED_CURRENCIES } from '../lib/currencies';
+import { formatCurrency } from '../lib/formatCurrency';
+import { parseAmount } from '../lib/parseAmount';
+import AmountInput from '../components/AmountInput';
 import { normalizeSymbol, parseSymbol } from '../services/prices/symbolNormalize';
 import { fetchAndCacheQuote } from '../services/prices/proxyClient';
 import { fetchAndCacheCryptos } from '../services/prices/coingeckoClient';
@@ -29,6 +39,11 @@ interface FormState {
   manualUnitPrice: string;
   cryptoId: string;
   notes: string;
+  deductEnabled: boolean;
+  deductAccountId: string; // string for select value; '' = unselected
+  deductAmount: string;
+  /** Only used in edit mode; create flow is always 'deduct'. */
+  deductDirection: AdjustmentDirection;
 }
 
 const blank = (currency: string): FormState => ({
@@ -43,6 +58,10 @@ const blank = (currency: string): FormState => ({
   manualUnitPrice: '',
   cryptoId: CRYPTOS[0].id,
   notes: '',
+  deductEnabled: false,
+  deductAccountId: '',
+  deductAmount: '',
+  deductDirection: 'deduct',
 });
 
 function inferBroker(asset: Asset): Broker {
@@ -68,6 +87,12 @@ export default function AssetForm() {
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
+
+  // For the optional "deduct from liquid account" feature on new investments.
+  const liquidAccounts = useLiveQuery(async () => {
+    const all = await db.assets.toArray();
+    return all.filter((a) => !a.archivedAt && a.category === 'liquid');
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -108,6 +133,10 @@ export default function AssetForm() {
             : '',
         cryptoId,
         notes: existing.notes ?? '',
+        deductEnabled: false,
+        deductAccountId: '',
+        deductAmount: '',
+        deductDirection: 'credit',
       });
     })();
     return () => {
@@ -165,8 +194,8 @@ export default function AssetForm() {
           alert('請輸入股票代號');
           return;
         }
-        const qty = Number(form.quantity);
-        if (!Number.isFinite(qty) || qty <= 0) {
+        const qty = parseAmount(form.quantity);
+        if (qty === null || qty <= 0) {
           alert('請輸入有效的股數');
           return;
         }
@@ -187,8 +216,8 @@ export default function AssetForm() {
           alert('請選擇幣種');
           return;
         }
-        const qty = Number(form.quantity);
-        if (!Number.isFinite(qty) || qty <= 0) {
+        const qty = parseAmount(form.quantity);
+        if (qty === null || qty <= 0) {
           alert('請輸入有效的數量');
           return;
         }
@@ -203,8 +232,8 @@ export default function AssetForm() {
         };
         cryptoIdToFetch = cryptoMeta.id;
       } else {
-        const value = Number(form.manualValue);
-        if (!Number.isFinite(value)) {
+        const value = parseAmount(form.manualValue);
+        if (value === null) {
           alert('請輸入有效的金額');
           return;
         }
@@ -219,9 +248,70 @@ export default function AssetForm() {
       }
 
       if (isEdit) {
-        await assetsRepo.update(editingId!, payload);
+        let cashAdjustment;
+        if (form.deductEnabled && form.category === 'investment') {
+          const accountId = Number(form.deductAccountId);
+          const amount = parseAmount(form.deductAmount);
+          if (!Number.isInteger(accountId) || accountId <= 0) {
+            alert(
+              form.deductDirection === 'credit'
+                ? '請選擇入帳帳戶'
+                : '請選擇扣款帳戶',
+            );
+            return;
+          }
+          if (amount === null || amount <= 0) {
+            alert(
+              form.deductDirection === 'credit'
+                ? '請輸入有效的入帳金額'
+                : '請輸入有效的扣款金額',
+            );
+            return;
+          }
+          cashAdjustment = {
+            accountId,
+            amount,
+            direction: form.deductDirection,
+          };
+        }
+        try {
+          await updateInvestmentWithAdjustment({
+            assetIdToUpdate: editingId!,
+            updatePayload: payload,
+            cashAdjustment,
+          });
+        } catch (e) {
+          alert(`更新失敗：${(e as Error).message}`);
+          return;
+        }
       } else {
-        await assetsRepo.create(payload);
+        // Optionally deduct cost from a liquid account in one transaction.
+        let cashAdjustment;
+        if (
+          form.deductEnabled &&
+          (form.type === 'stock' || form.type === 'crypto')
+        ) {
+          const accountId = Number(form.deductAccountId);
+          const amount = parseAmount(form.deductAmount);
+          if (!Number.isInteger(accountId) || accountId <= 0) {
+            alert('請選擇扣款帳戶');
+            return;
+          }
+          if (amount === null || amount <= 0) {
+            alert('請輸入有效的扣款金額');
+            return;
+          }
+          cashAdjustment = { accountId, amount };
+        }
+        try {
+          await createInvestmentWithDeduction({
+            newAsset: payload,
+            cashAdjustment,
+          });
+        } catch (e) {
+          alert(`建立失敗：${(e as Error).message}`);
+          return;
+        }
       }
 
       if (stockSymbolToFetch) {
@@ -332,14 +422,10 @@ export default function AssetForm() {
               />
             </Field>
             <Field label="股數">
-              <input
-                type="number"
-                inputMode="decimal"
-                step="any"
+              <AmountInput
                 value={form.quantity}
-                onChange={(e) => update('quantity', e.target.value)}
+                onChange={(v) => update('quantity', v)}
                 placeholder="0"
-                className="input text-right tabular-nums"
                 required
               />
             </Field>
@@ -365,14 +451,10 @@ export default function AssetForm() {
               </select>
             </Field>
             <Field label="持有數量">
-              <input
-                type="number"
-                inputMode="decimal"
-                step="any"
+              <AmountInput
                 value={form.quantity}
-                onChange={(e) => update('quantity', e.target.value)}
+                onChange={(v) => update('quantity', v)}
                 placeholder="例如：0.05"
-                className="input text-right tabular-nums"
                 required
               />
             </Field>
@@ -398,18 +480,44 @@ export default function AssetForm() {
               </select>
             </Field>
             <Field label="金額" className="col-span-2">
-              <input
-                type="number"
-                inputMode="decimal"
-                step="any"
+              <AmountInput
                 value={form.manualValue}
-                onChange={(e) => update('manualValue', e.target.value)}
+                onChange={(v) => update('manualValue', v)}
                 placeholder="0"
-                className="input text-right tabular-nums"
                 required
               />
             </Field>
           </div>
+        )}
+
+        {!isEdit && (isStock || isCrypto) && (
+          <DeductionSection
+            currency={isStock ? brokerMeta.currency : 'USD'}
+            liquidAccounts={liquidAccounts ?? []}
+            enabled={form.deductEnabled}
+            accountId={form.deductAccountId}
+            amount={form.deductAmount}
+            onEnabledChange={(v) => update('deductEnabled', v)}
+            onAccountChange={(v) => update('deductAccountId', v)}
+            onAmountChange={(v) => update('deductAmount', v)}
+          />
+        )}
+
+        {isEdit && form.category === 'investment' && (
+          <DeductionSection
+            currency={
+              isStock ? brokerMeta.currency : isCrypto ? 'USD' : form.currency
+            }
+            liquidAccounts={liquidAccounts ?? []}
+            enabled={form.deductEnabled}
+            accountId={form.deductAccountId}
+            amount={form.deductAmount}
+            direction={form.deductDirection}
+            onEnabledChange={(v) => update('deductEnabled', v)}
+            onAccountChange={(v) => update('deductAccountId', v)}
+            onAmountChange={(v) => update('deductAmount', v)}
+            onDirectionChange={(v) => update('deductDirection', v)}
+          />
         )}
 
         <Field label="備註（可選）">
@@ -461,5 +569,150 @@ function Field({
       <div className="mb-1 text-xs font-medium text-gray-700">{label}</div>
       {children}
     </label>
+  );
+}
+
+interface DeductionSectionProps {
+  currency: string;
+  liquidAccounts: Asset[];
+  enabled: boolean;
+  accountId: string;
+  amount: string;
+  /** When provided, the section shows a 入帳/扣款 radio and uses it. */
+  direction?: AdjustmentDirection;
+  onEnabledChange: (v: boolean) => void;
+  onAccountChange: (v: string) => void;
+  onAmountChange: (v: string) => void;
+  onDirectionChange?: (v: AdjustmentDirection) => void;
+}
+
+function DeductionSection({
+  currency,
+  liquidAccounts,
+  enabled,
+  accountId,
+  amount,
+  direction,
+  onEnabledChange,
+  onAccountChange,
+  onAmountChange,
+  onDirectionChange,
+}: DeductionSectionProps) {
+  const matching = useMemo(
+    () => liquidAccounts.filter((a) => a.currency === currency),
+    [liquidAccounts, currency],
+  );
+
+  // Without a direction prop, the section is the legacy create-flow
+  // "deduct only" variant.
+  const effectiveDirection: AdjustmentDirection = direction ?? 'deduct';
+  const isCredit = effectiveDirection === 'credit';
+
+  if (matching.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+        尚無 {currency} 流動資金帳戶可供調整。先到「資產」頁建立一個{currency}{' '}
+        現金 / 銀行帳戶後即可使用。
+      </div>
+    );
+  }
+
+  const numericAmount = parseAmount(amount);
+  const selected =
+    accountId && matching.find((a) => String(a.id) === accountId);
+  const balanceAfter =
+    selected && numericAmount !== null
+      ? (selected.manualValue ?? 0) +
+        (isCredit ? numericAmount : -numericAmount)
+      : null;
+
+  const toggleLabel = direction
+    ? '同時調整流動資金'
+    : '同時從流動資金扣款';
+  const accountLabel = isCredit ? '入帳帳戶' : '扣款帳戶';
+  const amountLabel = isCredit
+    ? `入帳金額（${currency}）`
+    : `實付金額（${currency}）`;
+  const amountPlaceholder = isCredit
+    ? '從交割單抄入，已扣手續費後的實收'
+    : '從券商交割單抄入，含手續費';
+
+  return (
+    <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+      <label className="flex items-center gap-2 text-sm text-gray-800">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => onEnabledChange(e.target.checked)}
+        />
+        <span>{toggleLabel}</span>
+      </label>
+      {enabled && (
+        <div className="mt-3 space-y-3">
+          {direction && onDirectionChange && (
+            <Field label="方向">
+              <div className="flex gap-4 text-sm text-gray-800">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="adjust-direction"
+                    value="credit"
+                    checked={isCredit}
+                    onChange={() => onDirectionChange('credit')}
+                  />
+                  <span>入帳（賣出 / 減碼）</span>
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="radio"
+                    name="adjust-direction"
+                    value="deduct"
+                    checked={!isCredit}
+                    onChange={() => onDirectionChange('deduct')}
+                  />
+                  <span>扣款（加碼）</span>
+                </label>
+              </div>
+            </Field>
+          )}
+          <Field label={accountLabel}>
+            <select
+              value={accountId}
+              onChange={(e) => onAccountChange(e.target.value)}
+              className="select"
+              required
+            >
+              <option value="">— 請選擇 —</option>
+              {matching.map((a) => (
+                <option key={a.id} value={String(a.id)}>
+                  {a.name}（餘額 {formatCurrency(a.manualValue ?? 0, a.currency)}）
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label={amountLabel}>
+            <AmountInput
+              value={amount}
+              onChange={onAmountChange}
+              placeholder={amountPlaceholder}
+              unit={currency}
+              required
+            />
+          </Field>
+          {balanceAfter !== null && (
+            isCredit ? (
+              <div className="text-xs text-gray-500">
+                入帳後餘額：{formatCurrency(balanceAfter, currency)}
+              </div>
+            ) : balanceAfter < 0 ? (
+              <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                扣款後餘額將為 {formatCurrency(balanceAfter, currency)}
+                （仍可送出）
+              </div>
+            ) : null
+          )}
+        </div>
+      )}
+    </div>
   );
 }
