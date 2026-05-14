@@ -4,6 +4,7 @@ import { assetsRepo } from '../src/db/repositories/assetsRepo';
 import {
   createInvestmentWithDeduction,
   deleteInvestmentWithCredit,
+  updateInvestmentWithAdjustment,
 } from '../src/domain/cashAdjustment';
 
 afterEach(async () => {
@@ -171,6 +172,166 @@ describe('deleteInvestmentWithCredit', () => {
       deleteInvestmentWithCredit({
         assetIdToDelete: 99999,
         cashAdjustment: { accountId: cashId, amount: 1_000 },
+      }),
+    ).rejects.toThrow(/不存在/);
+
+    const cash = await assetsRepo.getById(cashId);
+    expect(cash?.manualValue).toBe(50_000);
+  });
+});
+
+describe('updateInvestmentWithAdjustment', () => {
+  it('updates the asset and credits cash (sell-some scenario)', async () => {
+    const cashId = await assetsRepo.create({
+      category: 'liquid',
+      type: 'cash',
+      name: 'Bank',
+      currency: 'TWD',
+      manualValue: 50_000,
+    });
+    const stockId = await assetsRepo.create({
+      category: 'investment',
+      type: 'stock',
+      name: 'TSMC',
+      currency: 'TWD',
+      symbol: '2330.TW',
+      quantity: 100,
+      broker: 'tw_broker',
+    });
+
+    await updateInvestmentWithAdjustment({
+      assetIdToUpdate: stockId,
+      updatePayload: { quantity: 60 },
+      cashAdjustment: {
+        accountId: cashId,
+        amount: 40_000,
+        direction: 'credit',
+      },
+    });
+
+    const cash = await assetsRepo.getById(cashId);
+    expect(cash?.manualValue).toBe(90_000);
+    const stock = await assetsRepo.getById(stockId);
+    expect(stock?.quantity).toBe(60);
+  });
+
+  it('updates the asset and deducts cash (add-on buy scenario)', async () => {
+    const cashId = await assetsRepo.create({
+      category: 'liquid',
+      type: 'cash',
+      name: 'Bank',
+      currency: 'TWD',
+      manualValue: 100_000,
+    });
+    const stockId = await assetsRepo.create({
+      category: 'investment',
+      type: 'stock',
+      name: 'TSMC',
+      currency: 'TWD',
+      symbol: '2330.TW',
+      quantity: 100,
+      broker: 'tw_broker',
+    });
+
+    await updateInvestmentWithAdjustment({
+      assetIdToUpdate: stockId,
+      updatePayload: { quantity: 150 },
+      cashAdjustment: {
+        accountId: cashId,
+        amount: 30_000,
+        direction: 'deduct',
+      },
+    });
+
+    const cash = await assetsRepo.getById(cashId);
+    expect(cash?.manualValue).toBe(70_000);
+    const stock = await assetsRepo.getById(stockId);
+    expect(stock?.quantity).toBe(150);
+  });
+
+  it('updates without touching cash when no adjustment is given', async () => {
+    const cashId = await assetsRepo.create({
+      category: 'liquid',
+      type: 'cash',
+      name: 'Bank',
+      currency: 'TWD',
+      manualValue: 100_000,
+    });
+    const stockId = await assetsRepo.create({
+      category: 'investment',
+      type: 'stock',
+      name: 'TSMC',
+      currency: 'TWD',
+      symbol: '2330.TW',
+      quantity: 100,
+      broker: 'tw_broker',
+    });
+
+    await updateInvestmentWithAdjustment({
+      assetIdToUpdate: stockId,
+      updatePayload: { name: 'TSMC ADR' },
+    });
+
+    const cash = await assetsRepo.getById(cashId);
+    expect(cash?.manualValue).toBe(100_000);
+    const stock = await assetsRepo.getById(stockId);
+    expect(stock?.name).toBe('TSMC ADR');
+  });
+
+  it('rolls back when the cash account is wrong currency', async () => {
+    const usdId = await assetsRepo.create({
+      category: 'liquid',
+      type: 'cash',
+      name: 'USD',
+      currency: 'USD',
+      manualValue: 5_000,
+    });
+    const stockId = await assetsRepo.create({
+      category: 'investment',
+      type: 'stock',
+      name: 'TSMC',
+      currency: 'TWD',
+      symbol: '2330.TW',
+      quantity: 100,
+      broker: 'tw_broker',
+    });
+
+    await expect(
+      updateInvestmentWithAdjustment({
+        assetIdToUpdate: stockId,
+        updatePayload: { quantity: 50 },
+        cashAdjustment: {
+          accountId: usdId,
+          amount: 1_000,
+          direction: 'credit',
+        },
+      }),
+    ).rejects.toThrow(/幣別不符/);
+
+    const usd = await assetsRepo.getById(usdId);
+    expect(usd?.manualValue).toBe(5_000);
+    const stock = await assetsRepo.getById(stockId);
+    expect(stock?.quantity).toBe(100);
+  });
+
+  it('rolls back when target asset does not exist', async () => {
+    const cashId = await assetsRepo.create({
+      category: 'liquid',
+      type: 'cash',
+      name: 'Bank',
+      currency: 'TWD',
+      manualValue: 50_000,
+    });
+
+    await expect(
+      updateInvestmentWithAdjustment({
+        assetIdToUpdate: 99999,
+        updatePayload: { quantity: 50 },
+        cashAdjustment: {
+          accountId: cashId,
+          amount: 1_000,
+          direction: 'credit',
+        },
       }),
     ).rejects.toThrow(/不存在/);
 
