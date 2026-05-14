@@ -11,6 +11,7 @@ import StockTreemap from '../components/StockTreemap';
 import NetWorthLineChart, {
   type RangeKey,
 } from '../components/NetWorthLineChart';
+import InvestmentTrendChart from '../components/InvestmentTrendChart';
 import {
   INVESTMENT_BUCKETS,
   bucketInvestmentTotals,
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const { loading, errors, refresh } = useRefreshPrices();
   const [expanded, setExpanded] = useState<ExpandableBucket | null>(null);
   const [range, setRange] = useState<RangeKey>('6M');
+  const [investmentRange, setInvestmentRange] = useState<RangeKey>('6M');
 
   if (!portfolio) {
     return <div className="text-sm text-gray-500">載入中…</div>;
@@ -178,6 +180,13 @@ export default function Dashboard() {
             base={portfolio.base}
             range={range}
             onRangeChange={setRange}
+          />
+
+          <InvestmentTrendChart
+            snapshots={snapshots ?? []}
+            base={portfolio.base}
+            range={investmentRange}
+            onRangeChange={setInvestmentRange}
           />
 
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
