@@ -6,7 +6,10 @@ import clsx from 'clsx';
 import { CATEGORY_BY_KEY, ASSET_TYPE_LABELS } from '../domain/categories';
 import { BROKER_BY_CODE } from '../domain/brokers';
 import { CRYPTO_BY_ID } from '../domain/cryptos';
-import { INVESTMENT_BUCKETS } from '../domain/investmentBuckets';
+import {
+  INVESTMENT_BUCKET_BY_KEY,
+  US_STOCK_PARENT,
+} from '../domain/investmentBuckets';
 import { LIQUID_BUCKETS } from '../domain/liquidBuckets';
 import { assetsRepo } from '../db/repositories/assetsRepo';
 import { db } from '../db/database';
@@ -43,9 +46,6 @@ const liquidMeta = CATEGORY_BY_KEY.liquid;
 const investmentMeta = CATEGORY_BY_KEY.investment;
 const fixedMeta = CATEGORY_BY_KEY.fixed;
 
-const BUCKET_BY_KEY = Object.fromEntries(
-  INVESTMENT_BUCKETS.map((b) => [b.key, b]),
-);
 const LIQUID_BUCKET_BY_KEY = Object.fromEntries(
   LIQUID_BUCKETS.map((b) => [b.key, b]),
 );
@@ -248,8 +248,8 @@ export default function AssetsList() {
           <div className="mt-2 space-y-3">
             {allUsStocks.length > 0 && (
               <Block
-                color={BUCKET_BY_KEY.us_stock!.color}
-                label="美元股票"
+                color={US_STOCK_PARENT.color}
+                label={US_STOCK_PARENT.label}
                 count={allUsStocks.length}
                 total={usStocksTotal}
                 base={portfolio.base}
@@ -261,8 +261,8 @@ export default function AssetsList() {
                 <div className="space-y-2">
                   {usSubBroker.length > 0 && (
                     <Block
-                      color={BUCKET_BY_KEY.us_stock!.color}
-                      label="複委託"
+                      color={INVESTMENT_BUCKET_BY_KEY.us_sub_broker.color}
+                      label={INVESTMENT_BUCKET_BY_KEY.us_sub_broker.label}
                       count={usSubBroker.length}
                       total={usSubBrokerTotal}
                       base={portfolio.base}
@@ -281,8 +281,8 @@ export default function AssetsList() {
                   )}
                   {usOverseas.length > 0 && (
                     <Block
-                      color={BUCKET_BY_KEY.us_stock!.color}
-                      label="海外券商"
+                      color={INVESTMENT_BUCKET_BY_KEY.us_overseas.color}
+                      label={INVESTMENT_BUCKET_BY_KEY.us_overseas.label}
                       count={usOverseas.length}
                       total={usOverseasTotal}
                       base={portfolio.base}
@@ -304,7 +304,7 @@ export default function AssetsList() {
             )}
             {twStocks.length > 0 && (
               <Block
-                color={BUCKET_BY_KEY.tw_stock!.color}
+                color={INVESTMENT_BUCKET_BY_KEY.tw_stock.color}
                 label="台灣股票"
                 count={twStocks.length}
                 total={twStocksTotal}
@@ -324,7 +324,7 @@ export default function AssetsList() {
             )}
             {cryptos.length > 0 && (
               <Block
-                color={BUCKET_BY_KEY.crypto!.color}
+                color={INVESTMENT_BUCKET_BY_KEY.crypto.color}
                 label="加密貨幣"
                 count={cryptos.length}
                 total={cryptosTotal}
@@ -344,7 +344,7 @@ export default function AssetsList() {
             )}
             {others.length > 0 && (
               <Block
-                color={BUCKET_BY_KEY.other!.color}
+                color={INVESTMENT_BUCKET_BY_KEY.other.color}
                 label="其他"
                 count={others.length}
                 total={othersTotal}

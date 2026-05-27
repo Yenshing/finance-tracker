@@ -50,12 +50,13 @@ export interface Snapshot {
   totalNetWorth: number;
   byCategory: Record<Category, number>;
   /**
-   * Per-bucket breakdown of the `investment` category, added later than the
+   * Per-broker breakdown of the `investment` category, added later than the
    * core schema. Older snapshots may not have this — chart code must handle
-   * the undefined case.
+   * the undefined case (line will skip those points).
    */
   byInvestmentBucket?: {
-    us_stock: number;
+    us_sub_broker: number;
+    us_overseas: number;
     tw_stock: number;
     crypto: number;
     other: number;

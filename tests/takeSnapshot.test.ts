@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 
 describe('takeSnapshot', () => {
-  it('persists per-bucket investment totals (us / tw / crypto / other)', async () => {
+  it('persists per-broker investment totals across all 5 buckets', async () => {
     await assetsRepo.create({
       category: 'liquid',
       type: 'cash',
@@ -34,12 +34,22 @@ describe('takeSnapshot', () => {
     await assetsRepo.create({
       category: 'investment',
       type: 'stock',
-      name: 'Apple',
+      name: 'Apple (sub_broker)',
       currency: 'TWD',
       symbol: 'AAPL',
       quantity: 10,
       broker: 'sub_broker',
       manualUnitPrice: 5_000,
+    });
+    await assetsRepo.create({
+      category: 'investment',
+      type: 'stock',
+      name: 'Tesla (overseas)',
+      currency: 'TWD',
+      symbol: 'TSLA',
+      quantity: 5,
+      broker: 'overseas',
+      manualUnitPrice: 8_000,
     });
     await assetsRepo.create({
       category: 'investment',
@@ -57,10 +67,11 @@ describe('takeSnapshot', () => {
 
     expect(snap.byInvestmentBucket).toBeDefined();
     expect(snap.byInvestmentBucket?.tw_stock).toBe(100_000);
-    expect(snap.byInvestmentBucket?.us_stock).toBe(50_000);
+    expect(snap.byInvestmentBucket?.us_sub_broker).toBe(50_000);
+    expect(snap.byInvestmentBucket?.us_overseas).toBe(40_000);
     expect(snap.byInvestmentBucket?.crypto).toBe(0);
     expect(snap.byInvestmentBucket?.other).toBe(30_000);
-    // Sum equals the category total so charts can derive 投資合計 consistently.
-    expect(snap.byCategory.investment).toBe(180_000);
+    // Buckets sum to the investment category total.
+    expect(snap.byCategory.investment).toBe(220_000);
   });
 });

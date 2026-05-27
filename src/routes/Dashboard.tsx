@@ -14,11 +14,10 @@ import NetWorthLineChart, {
 import InvestmentTrendChart from '../components/InvestmentTrendChart';
 import {
   INVESTMENT_BUCKETS,
+  INVESTMENT_BUCKET_BY_KEY,
   bucketInvestmentTotals,
+  type InvestmentBucketKey,
 } from '../domain/investmentBuckets';
-
-type ExpandableBucket = 'us_stock' | 'tw_stock';
-const EXPANDABLE: ReadonlySet<string> = new Set(['us_stock', 'tw_stock']);
 
 export default function Dashboard() {
   const portfolio = usePortfolio();
@@ -26,7 +25,7 @@ export default function Dashboard() {
   const snapshots = useSnapshots();
   const fmt = useFormatMoney();
   const { loading, errors, refresh } = useRefreshPrices();
-  const [expanded, setExpanded] = useState<ExpandableBucket | null>(null);
+  const [expanded, setExpanded] = useState<InvestmentBucketKey | null>(null);
   const [range, setRange] = useState<RangeKey>('6M');
   const [investmentRange, setInvestmentRange] = useState<RangeKey>('6M');
 
@@ -51,35 +50,17 @@ export default function Dashboard() {
     color: b.color,
   }));
 
-  const usStockItems = portfolio.assets.filter(
-    (v) =>
-      v.asset.category === 'investment' &&
-      v.asset.type === 'stock' &&
-      v.asset.broker !== 'tw_broker',
-  );
-  const twStockItems = portfolio.assets.filter(
-    (v) =>
-      v.asset.category === 'investment' &&
-      v.asset.type === 'stock' &&
-      v.asset.broker === 'tw_broker',
-  );
-
-  const expandedMeta =
-    expanded === 'us_stock'
-      ? INVESTMENT_BUCKETS.find((b) => b.key === 'us_stock')!
-      : expanded === 'tw_stock'
-        ? INVESTMENT_BUCKETS.find((b) => b.key === 'tw_stock')!
-        : null;
+  const expandedMeta = expanded ? INVESTMENT_BUCKET_BY_KEY[expanded] : null;
   const expandedItems =
-    expanded === 'us_stock'
-      ? usStockItems
-      : expanded === 'tw_stock'
-        ? twStockItems
-        : [];
+    expanded && expandedMeta?.hasTreemap
+      ? portfolio.assets.filter((v) => expandedMeta.match(v))
+      : [];
 
   function handleInvestmentSliceClick(key: string) {
-    if (!EXPANDABLE.has(key)) return;
-    setExpanded((prev) => (prev === key ? null : (key as ExpandableBucket)));
+    if (!(key in INVESTMENT_BUCKET_BY_KEY)) return;
+    setExpanded((prev) =>
+      prev === key ? null : (key as InvestmentBucketKey),
+    );
   }
 
   return (
@@ -160,12 +141,12 @@ export default function Dashboard() {
               base={portfolio.base}
               emptyMessage="尚無投資資料"
               onSliceClick={handleInvestmentSliceClick}
-              isClickable={(key) => EXPANDABLE.has(key)}
+              isClickable={(key) => key in INVESTMENT_BUCKET_BY_KEY}
               selectedKey={expanded}
             />
           </section>
 
-          {expandedMeta && (
+          {expandedMeta && expandedMeta.hasTreemap && (
             <StockTreemap
               title={expandedMeta.label}
               color={expandedMeta.color}
@@ -175,18 +156,21 @@ export default function Dashboard() {
             />
           )}
 
+          {expandedMeta && (
+            <InvestmentTrendChart
+              bucketKey={expandedMeta.key}
+              snapshots={snapshots ?? []}
+              base={portfolio.base}
+              range={investmentRange}
+              onRangeChange={setInvestmentRange}
+            />
+          )}
+
           <NetWorthLineChart
             snapshots={snapshots ?? []}
             base={portfolio.base}
             range={range}
             onRangeChange={setRange}
-          />
-
-          <InvestmentTrendChart
-            snapshots={snapshots ?? []}
-            base={portfolio.base}
-            range={investmentRange}
-            onRangeChange={setInvestmentRange}
           />
 
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">

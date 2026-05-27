@@ -37,6 +37,13 @@ interface Props {
   emptyMessage: string;
   /** Small note shown below the chart (e.g. for filtered-out snapshots). */
   footnote?: string;
+  /**
+   * Y-axis fit mode. 'zero' (default) anchors the bottom of the axis at 0 so
+   * categories of different magnitudes can be compared. 'data' lets Recharts
+   * auto-fit min/max to the visible data — use when a single series's slope
+   * would otherwise be flattened by a wide 0-based range.
+   */
+  yAxisFit?: 'zero' | 'data';
 }
 
 export default function TrendLineChart({
@@ -48,6 +55,7 @@ export default function TrendLineChart({
   onRangeChange,
   emptyMessage,
   footnote,
+  yAxisFit = 'zero',
 }: Props) {
   const hidden = useAmountsHidden();
   const fmt = useFormatMoney();
@@ -89,9 +97,12 @@ export default function TrendLineChart({
             >
               <CartesianGrid stroke="#f3f4f6" strokeDasharray="3 3" />
               <XAxis
-                dataKey="localDate"
+                dataKey="takenAt"
+                type="number"
+                scale="time"
+                domain={['dataMin', 'dataMax']}
                 tick={{ fontSize: 11, fill: '#9ca3af' }}
-                tickFormatter={(d: string) => d.slice(5)}
+                tickFormatter={formatAxisDate}
               />
               <YAxis
                 tick={{ fontSize: 11, fill: '#9ca3af' }}
@@ -99,6 +110,7 @@ export default function TrendLineChart({
                   hidden ? HIDDEN : compactNumber(v)
                 }
                 width={56}
+                domain={yAxisFit === 'data' ? ['auto', 'auto'] : [0, 'auto']}
               />
               <Tooltip
                 contentStyle={{
@@ -109,7 +121,10 @@ export default function TrendLineChart({
                 formatter={(v) =>
                   typeof v === 'number' ? fmt(v, base) : '—'
                 }
-                labelFormatter={(d) => `${d}`}
+                labelFormatter={(_, payload) => {
+                  const row = payload?.[0]?.payload as TrendRow | undefined;
+                  return row?.localDate ?? '';
+                }}
               />
               <Legend
                 iconType="circle"
@@ -138,6 +153,13 @@ export default function TrendLineChart({
       )}
     </section>
   );
+}
+
+function formatAxisDate(t: number): string {
+  const d = new Date(t);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${mm}-${dd}`;
 }
 
 function compactNumber(v: number): string {
