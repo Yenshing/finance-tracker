@@ -3,6 +3,7 @@ import { settingsRepo } from '../db/repositories/settingsRepo';
 import { snapshotsRepo } from '../db/repositories/snapshotsRepo';
 import { todayLocalDate } from '../lib/timezone';
 import { VALID_CATEGORY_KEYS } from './categories';
+import { bucketInvestmentTotals } from './investmentBuckets';
 import { buildPortfolioView } from './portfolio';
 
 /**
@@ -32,6 +33,7 @@ export async function takeSnapshot(source: 'auto' | 'manual'): Promise<void> {
     baseCurrency: settings.baseCurrency,
     totalNetWorth: portfolio.netWorth,
     byCategory: portfolio.byCategory,
+    byInvestmentBucket: bucketInvestmentTotals(portfolio.assets),
     source,
   });
 }

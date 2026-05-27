@@ -6,7 +6,10 @@ import clsx from 'clsx';
 import { CATEGORY_BY_KEY, ASSET_TYPE_LABELS } from '../domain/categories';
 import { BROKER_BY_CODE } from '../domain/brokers';
 import { CRYPTO_BY_ID } from '../domain/cryptos';
-import { INVESTMENT_BUCKETS } from '../domain/investmentBuckets';
+import {
+  INVESTMENT_BUCKET_BY_KEY,
+  US_STOCK_PARENT,
+} from '../domain/investmentBuckets';
 import { LIQUID_BUCKETS } from '../domain/liquidBuckets';
 import { assetsRepo } from '../db/repositories/assetsRepo';
 import { db } from '../db/database';
@@ -24,7 +27,6 @@ import type { AssetView } from '../domain/portfolio';
 import type { Asset } from '../db/types';
 
 type SortMode = 'value_desc' | 'name_asc';
-type UsBrokerFilter = 'all' | 'sub_broker' | 'overseas';
 
 const COLLAPSE_STORAGE_KEY = 'finance-tracker:assets-collapsed';
 
@@ -44,9 +46,6 @@ const liquidMeta = CATEGORY_BY_KEY.liquid;
 const investmentMeta = CATEGORY_BY_KEY.investment;
 const fixedMeta = CATEGORY_BY_KEY.fixed;
 
-const BUCKET_BY_KEY = Object.fromEntries(
-  INVESTMENT_BUCKETS.map((b) => [b.key, b]),
-);
 const LIQUID_BUCKET_BY_KEY = Object.fromEntries(
   LIQUID_BUCKETS.map((b) => [b.key, b]),
 );
@@ -66,7 +65,6 @@ function totalOf(items: AssetView[]): number {
 export default function AssetsList() {
   const portfolio = usePortfolio();
   const [sort, setSort] = useState<SortMode>('value_desc');
-  const [usBrokerFilter, setUsBrokerFilter] = useState<UsBrokerFilter>('all');
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
 
@@ -135,10 +133,8 @@ export default function AssetsList() {
   );
 
   const allUsStocks = sortItems(investmentItems.filter(isUsStock));
-  const visibleUsStocks =
-    usBrokerFilter === 'all'
-      ? allUsStocks
-      : allUsStocks.filter((v) => v.asset.broker === usBrokerFilter);
+  const usSubBroker = allUsStocks.filter((v) => v.asset.broker === 'sub_broker');
+  const usOverseas = allUsStocks.filter((v) => v.asset.broker === 'overseas');
   const twStocks = sortItems(investmentItems.filter(isTwStock));
   const cryptos = sortItems(investmentItems.filter(isCrypto));
   const others = sortItems(investmentItems.filter(isOtherInvestment));
@@ -148,6 +144,8 @@ export default function AssetsList() {
   const liquidUsdTotal = totalOf(liquidUsd);
   const liquidTwdTotal = totalOf(liquidTwd);
   const usStocksTotal = totalOf(allUsStocks);
+  const usSubBrokerTotal = totalOf(usSubBroker);
+  const usOverseasTotal = totalOf(usOverseas);
   const twStocksTotal = totalOf(twStocks);
   const cryptosTotal = totalOf(cryptos);
   const othersTotal = totalOf(others);
@@ -250,37 +248,63 @@ export default function AssetsList() {
           <div className="mt-2 space-y-3">
             {allUsStocks.length > 0 && (
               <Block
-                color={BUCKET_BY_KEY.us_stock!.color}
-                label="美元股票"
+                color={US_STOCK_PARENT.color}
+                label={US_STOCK_PARENT.label}
                 count={allUsStocks.length}
                 total={usStocksTotal}
                 base={portfolio.base}
                 totalAssets={portfolio.totalAssets}
                 collapsed={isCollapsed('us_stock')}
                 onToggle={() => toggle('us_stock')}
-                trailing={
-                  <UsBrokerChips
-                    value={usBrokerFilter}
-                    onChange={setUsBrokerFilter}
-                  />
-                }
                 indent
               >
-                {visibleUsStocks.length === 0 ? (
-                  <EmptyFilterPlaceholder />
-                ) : (
-                  <AssetTable
-                    items={visibleUsStocks}
-                    base={portfolio.base}
-                    blockTotal={usStocksTotal}
-                    onDelete={requestDelete}
-                  />
-                )}
+                <div className="space-y-2">
+                  {usSubBroker.length > 0 && (
+                    <Block
+                      color={INVESTMENT_BUCKET_BY_KEY.us_sub_broker.color}
+                      label={INVESTMENT_BUCKET_BY_KEY.us_sub_broker.label}
+                      count={usSubBroker.length}
+                      total={usSubBrokerTotal}
+                      base={portfolio.base}
+                      totalAssets={portfolio.totalAssets}
+                      collapsed={isCollapsed('us_stock_sub_broker')}
+                      onToggle={() => toggle('us_stock_sub_broker')}
+                      indent
+                    >
+                      <AssetTable
+                        items={usSubBroker}
+                        base={portfolio.base}
+                        blockTotal={usSubBrokerTotal}
+                        onDelete={requestDelete}
+                      />
+                    </Block>
+                  )}
+                  {usOverseas.length > 0 && (
+                    <Block
+                      color={INVESTMENT_BUCKET_BY_KEY.us_overseas.color}
+                      label={INVESTMENT_BUCKET_BY_KEY.us_overseas.label}
+                      count={usOverseas.length}
+                      total={usOverseasTotal}
+                      base={portfolio.base}
+                      totalAssets={portfolio.totalAssets}
+                      collapsed={isCollapsed('us_stock_overseas')}
+                      onToggle={() => toggle('us_stock_overseas')}
+                      indent
+                    >
+                      <AssetTable
+                        items={usOverseas}
+                        base={portfolio.base}
+                        blockTotal={usOverseasTotal}
+                        onDelete={requestDelete}
+                      />
+                    </Block>
+                  )}
+                </div>
               </Block>
             )}
             {twStocks.length > 0 && (
               <Block
-                color={BUCKET_BY_KEY.tw_stock!.color}
+                color={INVESTMENT_BUCKET_BY_KEY.tw_stock.color}
                 label="台灣股票"
                 count={twStocks.length}
                 total={twStocksTotal}
@@ -300,7 +324,7 @@ export default function AssetsList() {
             )}
             {cryptos.length > 0 && (
               <Block
-                color={BUCKET_BY_KEY.crypto!.color}
+                color={INVESTMENT_BUCKET_BY_KEY.crypto.color}
                 label="加密貨幣"
                 count={cryptos.length}
                 total={cryptosTotal}
@@ -320,7 +344,7 @@ export default function AssetsList() {
             )}
             {others.length > 0 && (
               <Block
-                color={BUCKET_BY_KEY.other!.color}
+                color={INVESTMENT_BUCKET_BY_KEY.other.color}
                 label="其他"
                 count={others.length}
                 total={othersTotal}
@@ -422,7 +446,6 @@ function Block({
   totalAssets,
   collapsed,
   onToggle,
-  trailing,
   indent,
   children,
 }: {
@@ -434,7 +457,6 @@ function Block({
   totalAssets: number;
   collapsed: boolean;
   onToggle: () => void;
-  trailing?: React.ReactNode;
   indent?: boolean;
   children: React.ReactNode;
 }) {
@@ -460,15 +482,6 @@ function Block({
           {label}
         </h3>
         <span className="text-xs text-gray-400">{count} 筆</span>
-        {trailing && (
-          <span
-            className="ml-2"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            {trailing}
-          </span>
-        )}
         <span className="ml-auto flex items-baseline gap-2 pr-1">
           <span className="text-sm font-semibold tabular-nums text-gray-900">
             {fmt(total, base)}
@@ -498,51 +511,6 @@ function Chevron({ open }: { open: boolean }) {
     >
       <path d="M6 4l4 4-4 4V4z" />
     </svg>
-  );
-}
-
-function EmptyFilterPlaceholder() {
-  return (
-    <div className="rounded-lg border border-dashed border-gray-200 bg-white p-4 text-center text-xs text-gray-400">
-      目前篩選條件下沒有資料
-    </div>
-  );
-}
-
-function UsBrokerChips({
-  value,
-  onChange,
-}: {
-  value: UsBrokerFilter;
-  onChange: (next: UsBrokerFilter) => void;
-}) {
-  const chips: { key: UsBrokerFilter; label: string }[] = [
-    { key: 'all', label: '全部' },
-    { key: 'sub_broker', label: '複委託' },
-    { key: 'overseas', label: '海外券商' },
-  ];
-
-  return (
-    <div className="flex flex-wrap gap-1">
-      {chips.map(({ key, label }) => (
-        <button
-          key={key}
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onChange(key);
-          }}
-          className={clsx(
-            'rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
-            value === key
-              ? 'bg-gray-900 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-          )}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
   );
 }
 
