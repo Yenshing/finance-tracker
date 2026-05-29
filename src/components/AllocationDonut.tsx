@@ -19,6 +19,8 @@ interface Props {
   onSliceClick?: (key: string) => void;
   isClickable?: (key: string) => boolean;
   selectedKey?: string | null;
+  /** Label shown above the centered total (default "合計"). */
+  totalLabel?: string;
 }
 
 export default function AllocationDonut({
@@ -29,6 +31,7 @@ export default function AllocationDonut({
   onSliceClick,
   isClickable,
   selectedKey,
+  totalLabel = '合計',
 }: Props) {
   const fmt = useFormatMoney();
   const total = data.reduce((s, d) => s + d.value, 0);
@@ -110,7 +113,7 @@ export default function AllocationDonut({
                 />
               </PieChart>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-[10px] text-gray-400">合計</div>
+                <div className="text-[10px] text-gray-400">{totalLabel}</div>
                 <div className="text-sm font-semibold tabular-nums text-gray-900">
                   {fmt(total, base)}
                 </div>

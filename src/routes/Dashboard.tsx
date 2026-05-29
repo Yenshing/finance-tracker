@@ -7,17 +7,11 @@ import { useRefreshPrices } from '../state/useRefreshPrices';
 import { useSnapshots } from '../state/useSnapshots';
 import AllocationDonut, { type DonutSlice } from '../components/AllocationDonut';
 import CategoryCard from '../components/CategoryCard';
-import StockTreemap from '../components/StockTreemap';
 import NetWorthLineChart, {
   type RangeKey,
 } from '../components/NetWorthLineChart';
-import InvestmentTrendChart from '../components/InvestmentTrendChart';
-import {
-  INVESTMENT_BUCKETS,
-  INVESTMENT_BUCKET_BY_KEY,
-  bucketInvestmentTotals,
-  type InvestmentBucketKey,
-} from '../domain/investmentBuckets';
+import CurrencyPoolBars from '../components/CurrencyPoolBars';
+import { computeCurrencyPools } from '../domain/currencyPools';
 
 export default function Dashboard() {
   const portfolio = usePortfolio();
@@ -25,9 +19,7 @@ export default function Dashboard() {
   const snapshots = useSnapshots();
   const fmt = useFormatMoney();
   const { loading, errors, refresh } = useRefreshPrices();
-  const [expanded, setExpanded] = useState<InvestmentBucketKey | null>(null);
   const [range, setRange] = useState<RangeKey>('6M');
-  const [investmentRange, setInvestmentRange] = useState<RangeKey>('6M');
 
   if (!portfolio) {
     return <div className="text-sm text-gray-500">載入中…</div>;
@@ -42,26 +34,7 @@ export default function Dashboard() {
     color: meta.hex,
   }));
 
-  const investmentTotals = bucketInvestmentTotals(portfolio.assets);
-  const investmentSlices: DonutSlice[] = INVESTMENT_BUCKETS.map((b) => ({
-    key: b.key,
-    name: b.label,
-    value: investmentTotals[b.key],
-    color: b.color,
-  }));
-
-  const expandedMeta = expanded ? INVESTMENT_BUCKET_BY_KEY[expanded] : null;
-  const expandedItems =
-    expanded && expandedMeta?.hasTreemap
-      ? portfolio.assets.filter((v) => expandedMeta.match(v))
-      : [];
-
-  function handleInvestmentSliceClick(key: string) {
-    if (!(key in INVESTMENT_BUCKET_BY_KEY)) return;
-    setExpanded((prev) =>
-      prev === key ? null : (key as InvestmentBucketKey),
-    );
-  }
+  const currencyPools = computeCurrencyPools(portfolio.assets);
 
   return (
     <div className="space-y-6">
@@ -95,21 +68,21 @@ export default function Dashboard() {
       {(portfolio.unconvertibleCount > 0 ||
         portfolio.staleCount > 0 ||
         errors.length > 0) && (
-        <div className="space-y-1 text-xs">
+        <div className="flex flex-col items-start gap-1 text-xs">
           {portfolio.unconvertibleCount > 0 && (
-            <div className="inline-block rounded bg-amber-100 px-2 py-1 text-amber-800">
+            <div className="rounded bg-amber-100 px-2 py-1 text-amber-800">
               有 {portfolio.unconvertibleCount} 筆資產缺少匯率資料未計入。請按「更新報價」。
             </div>
           )}
           {portfolio.staleCount > 0 && (
-            <div className="inline-block rounded bg-amber-100 px-2 py-1 text-amber-800">
+            <div className="rounded bg-amber-100 px-2 py-1 text-amber-800">
               有 {portfolio.staleCount} 筆股票尚未抓價，市值暫顯示為 0。
             </div>
           )}
           {errors.map((err) => (
             <div
               key={err}
-              className="inline-block rounded bg-red-100 px-2 py-1 text-red-800"
+              className="rounded bg-red-100 px-2 py-1 text-red-800"
             >
               {err}
             </div>
@@ -129,48 +102,11 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <AllocationDonut
-              title="資產分類"
-              data={categorySlices}
-              base={portfolio.base}
-            />
-            <AllocationDonut
-              title="投資組合"
-              data={investmentSlices}
-              base={portfolio.base}
-              emptyMessage="尚無投資資料"
-              onSliceClick={handleInvestmentSliceClick}
-              isClickable={(key) => key in INVESTMENT_BUCKET_BY_KEY}
-              selectedKey={expanded}
-            />
-          </section>
-
-          {expandedMeta && expandedMeta.hasTreemap && (
-            <StockTreemap
-              title={expandedMeta.label}
-              color={expandedMeta.color}
-              items={expandedItems}
-              base={portfolio.base}
-              onClose={() => setExpanded(null)}
-            />
-          )}
-
-          {expandedMeta && (
-            <InvestmentTrendChart
-              bucketKey={expandedMeta.key}
-              snapshots={snapshots ?? []}
-              base={portfolio.base}
-              range={investmentRange}
-              onRangeChange={setInvestmentRange}
-            />
-          )}
-
-          <NetWorthLineChart
-            snapshots={snapshots ?? []}
+          <AllocationDonut
+            title="資產分類"
+            data={categorySlices}
             base={portfolio.base}
-            range={range}
-            onRangeChange={setRange}
+            totalLabel="總資產"
           />
 
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -187,6 +123,19 @@ export default function Dashboard() {
               />
             ))}
           </section>
+
+          <CurrencyPoolBars
+            title="幣別池內部組成"
+            pools={currencyPools}
+            base={portfolio.base}
+          />
+
+          <NetWorthLineChart
+            snapshots={snapshots ?? []}
+            base={portfolio.base}
+            range={range}
+            onRangeChange={setRange}
+          />
         </>
       )}
     </div>

@@ -13,7 +13,7 @@ export const CATEGORIES: CategoryMeta[] = [
     key: 'liquid',
     label: '流動資金',
     description: '現金、銀行存款、電子錢包',
-    hex: '#3b82f6',
+    hex: '#0ea5e9',
     defaultTypes: ['cash', 'custom'],
   },
   {
