@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import { CATEGORY_BY_KEY, ASSET_TYPE_LABELS } from '../domain/categories';
 import { BROKER_BY_CODE } from '../domain/brokers';
@@ -64,9 +64,18 @@ function totalOf(items: AssetView[]): number {
 
 export default function AssetsList() {
   const portfolio = usePortfolio();
+  const location = useLocation();
   const [sort, setSort] = useState<SortMode>('value_desc');
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
+
+  useEffect(() => {
+    if (!portfolio || !location.hash) return;
+    const id = location.hash.slice(1);
+    requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+    });
+  }, [location.hash, portfolio]);
 
   const liquidAccounts = useLiveQuery(async () => {
     const all = await db.assets.toArray();
@@ -181,7 +190,7 @@ export default function AssetsList() {
       )}
 
       {liquidItems.length > 0 && (
-        <section>
+        <section id="liquid" className="scroll-mt-20">
           <TopLevelHeader
             color={liquidMeta.hex}
             label={liquidMeta.label}
@@ -236,7 +245,7 @@ export default function AssetsList() {
       )}
 
       {investmentItems.length > 0 && (
-        <section>
+        <section id="investment" className="scroll-mt-20">
           <TopLevelHeader
             color={investmentMeta.hex}
             label={investmentMeta.label}
@@ -367,7 +376,7 @@ export default function AssetsList() {
       )}
 
       {fixedItems.length > 0 && (
-        <section>
+        <section id="fixed" className="scroll-mt-20">
           <TopLevelHeader
             color={fixedMeta.hex}
             label={fixedMeta.label}

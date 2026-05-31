@@ -10,8 +10,6 @@ import CategoryCard from '../components/CategoryCard';
 import NetWorthLineChart, {
   type RangeKey,
 } from '../components/NetWorthLineChart';
-import CurrencyPoolBars from '../components/CurrencyPoolBars';
-import { computeCurrencyPools } from '../domain/currencyPools';
 
 export default function Dashboard() {
   const portfolio = usePortfolio();
@@ -34,7 +32,15 @@ export default function Dashboard() {
     color: meta.hex,
   }));
 
-  const currencyPools = computeCurrencyPools(portfolio.assets);
+  const topByCategory: Record<string, { name: string; value: number }> = {};
+  for (const view of portfolio.assets) {
+    if (view.valueInBase === null) continue;
+    const cat = view.asset.category;
+    const current = topByCategory[cat];
+    if (!current || view.valueInBase > current.value) {
+      topByCategory[cat] = { name: view.asset.name, value: view.valueInBase };
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -102,33 +108,28 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          <AllocationDonut
-            title="資產分類"
-            data={categorySlices}
-            base={portfolio.base}
-            totalLabel="總資產"
-          />
-
-          <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {CATEGORIES.map((meta) => (
-              <CategoryCard
-                key={meta.key}
-                meta={meta}
-                amount={portfolio.byCategory[meta.key]}
-                base={portfolio.base}
-                totalAssets={portfolio.totalAssets}
-                count={
-                  portfolio.assets.filter((v) => v.asset.category === meta.key).length
-                }
-              />
-            ))}
+          <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <AllocationDonut
+              title="資產分類"
+              data={categorySlices}
+              base={portfolio.base}
+              totalLabel="總資產"
+            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {CATEGORIES.map((meta) => (
+                <CategoryCard
+                  key={meta.key}
+                  meta={meta}
+                  amount={portfolio.byCategory[meta.key]}
+                  base={portfolio.base}
+                  count={
+                    portfolio.assets.filter((v) => v.asset.category === meta.key).length
+                  }
+                  topAssetName={topByCategory[meta.key]?.name}
+                />
+              ))}
+            </div>
           </section>
-
-          <CurrencyPoolBars
-            title="幣別池內部組成"
-            pools={currencyPools}
-            base={portfolio.base}
-          />
 
           <NetWorthLineChart
             snapshots={snapshots ?? []}

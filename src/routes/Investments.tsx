@@ -6,12 +6,14 @@ import { useSnapshots } from '../state/useSnapshots';
 import AllocationDonut, { type DonutSlice } from '../components/AllocationDonut';
 import StockTreemap from '../components/StockTreemap';
 import InvestmentTrendChart from '../components/InvestmentTrendChart';
+import CurrencyPoolBars from '../components/CurrencyPoolBars';
 import {
   INVESTMENT_BUCKETS,
   INVESTMENT_BUCKET_BY_KEY,
   bucketInvestmentTotals,
   type InvestmentBucketKey,
 } from '../domain/investmentBuckets';
+import { computeCurrencyPools } from '../domain/currencyPools';
 import { type RangeKey } from '../components/trendRange';
 
 const BUCKET_PARAM = 'bucket';
@@ -67,6 +69,8 @@ export default function Investments() {
     color: b.color,
   }));
 
+  const currencyPools = computeCurrencyPools(portfolio.assets);
+
   const selectedMeta = selected ? INVESTMENT_BUCKET_BY_KEY[selected] : null;
   const selectedItems =
     selected && selectedMeta?.hasTreemap
@@ -109,16 +113,23 @@ export default function Investments() {
         </div>
       </header>
 
-      <AllocationDonut
-        title="投資組合"
-        data={investmentSlices}
-        base={portfolio.base}
-        emptyMessage="尚無投資資料"
-        onSliceClick={handleSliceClick}
-        isClickable={(key) => key in INVESTMENT_BUCKET_BY_KEY}
-        selectedKey={selected}
-        totalLabel="投資合計"
-      />
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <AllocationDonut
+          title="投資組合"
+          data={investmentSlices}
+          base={portfolio.base}
+          emptyMessage="尚無投資資料"
+          onSliceClick={handleSliceClick}
+          isClickable={(key) => key in INVESTMENT_BUCKET_BY_KEY}
+          selectedKey={selected}
+          totalLabel="投資合計"
+        />
+        <CurrencyPoolBars
+          title="幣別池內部組成"
+          pools={currencyPools}
+          base={portfolio.base}
+        />
+      </section>
 
       {selectedMeta && (
         <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
