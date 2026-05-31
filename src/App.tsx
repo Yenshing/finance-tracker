@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import clsx from 'clsx';
 import Dashboard from './routes/Dashboard';
+import Investments from './routes/Investments';
 import AssetsList from './routes/AssetsList';
 import AssetForm from './routes/AssetForm';
 import HealthCheck from './routes/HealthCheck';
@@ -15,6 +16,7 @@ import { FileSyncProvider } from './state/useFileSync';
 
 const navItems = [
   { to: '/', label: '總覽', end: true },
+  { to: '/investments', label: '投資', end: false },
   { to: '/assets', label: '資產', end: false },
   { to: '/check', label: '健檢', end: false },
   { to: '/settings', label: '設定', end: false },
@@ -82,6 +84,7 @@ function App() {
         <main className="mx-auto max-w-5xl px-4 py-6">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/investments" element={<Investments />} />
             <Route path="/assets" element={<AssetsList />} />
             <Route path="/assets/new" element={<AssetForm />} />
             <Route path="/assets/:id/edit" element={<AssetForm />} />

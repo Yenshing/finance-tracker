@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import type { CategoryMeta } from '../domain/categories';
 import { useFormatMoney } from '../state/useAmountFormat';
 
@@ -5,27 +6,44 @@ interface Props {
   meta: CategoryMeta;
   amount: number;
   base: string;
-  totalAssets: number;
   count: number;
+  topAssetName?: string;
 }
 
-export default function CategoryCard({ meta, amount, base, totalAssets, count }: Props) {
+export default function CategoryCard({
+  meta,
+  amount,
+  base,
+  count,
+  topAssetName,
+}: Props) {
   const fmt = useFormatMoney();
-  const pct = totalAssets > 0 ? (amount / totalAssets) * 100 : null;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <div className="flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full" style={{ background: meta.hex }} />
-        <span className="text-sm font-medium text-gray-700">{meta.label}</span>
+    <Link
+      to={`/assets#${meta.key}`}
+      className="flex h-full flex-col rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:border-gray-300 hover:bg-gray-50"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ background: meta.hex }}
+          />
+          <span className="truncate text-sm font-medium text-gray-700">
+            {meta.label}
+          </span>
+        </div>
+        <span className="shrink-0 text-xs text-gray-400">{count} 筆 →</span>
       </div>
-      <div className="mt-2 text-xl font-semibold tabular-nums text-gray-900">
+      <div className="mt-2 truncate text-xl font-semibold tabular-nums text-gray-900">
         {fmt(amount, base)}
       </div>
-      <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
-        <span>{count} 筆</span>
-        {pct !== null && <span>{pct.toFixed(1)}%</span>}
-      </div>
-    </div>
+      {topAssetName && (
+        <div className="mt-auto truncate pt-2 text-xs text-gray-500">
+          最大：<span className="text-gray-700">{topAssetName}</span>
+        </div>
+      )}
+    </Link>
   );
 }
