@@ -4,7 +4,8 @@
  *   - Cloudflare Pages Function (functions/api/quote.ts)
  *
  * Providers:
- *   - US (default): Stooq CSV (previous trading day's close).
+ *   - US (default): Yahoo Finance chart API (latest regular-market price);
+ *     falls back to Stooq CSV if Yahoo fails.
  *   - TW (`.TW` suffix): TWSE STOCK_DAY first; falls back to TPEx OpenAPI for OTC.
  *
  * Neither TWSE nor TPEx return CORS headers, so the browser must call us — not them.
@@ -29,7 +30,71 @@ export async function fetchQuote(symbol: string): Promise<QuoteResponse | QuoteE
   if (symbol.toUpperCase().endsWith('.TW')) {
     return fetchTaiwanQuote(symbol);
   }
-  return fetchStooqQuote(symbol);
+  const yahoo = await fetchYahooQuote(symbol);
+  if (!('error' in yahoo) || yahoo.status === 404) return yahoo;
+  const stooq = await fetchStooqQuote(symbol);
+  return 'error' in stooq ? yahoo : stooq;
+}
+
+const UPSTREAM_TIMEOUT_MS = 8000;
+
+interface YahooChartEnvelope {
+  chart?: {
+    result?: Array<{
+      meta?: {
+        symbol?: string;
+        currency?: string;
+        regularMarketPrice?: number;
+        regularMarketTime?: number; // s epoch
+      };
+    }> | null;
+    error?: { code?: string; description?: string } | null;
+  };
+}
+
+async function fetchYahooQuote(symbol: string): Promise<QuoteResponse | QuoteError> {
+  // Yahoo uses "-" for share classes (BRK.B → BRK-B).
+  const yahooSymbol = symbol.toUpperCase().replace(/\./g, '-');
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+    yahooSymbol,
+  )}?range=1d&interval=1d`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      // Yahoo answers 429 to requests without a browser-like User-Agent.
+      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+  } catch (e) {
+    return { error: `Yahoo network: ${(e as Error).message}`, status: 502 };
+  }
+  if (res.status === 404) {
+    return { error: 'symbol not found', status: 404 };
+  }
+  if (!res.ok) {
+    return { error: `Yahoo upstream ${res.status}`, status: 502 };
+  }
+  let body: YahooChartEnvelope;
+  try {
+    body = (await res.json()) as YahooChartEnvelope;
+  } catch {
+    return { error: 'Yahoo JSON parse failed', status: 502 };
+  }
+  const meta = body.chart?.result?.[0]?.meta;
+  if (!meta) {
+    return { error: 'symbol not found', status: 404 };
+  }
+  const price = meta.regularMarketPrice;
+  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) {
+    return { error: 'Yahoo unparseable price', status: 502 };
+  }
+  return {
+    symbol: symbol.toUpperCase(),
+    price,
+    currency: meta.currency ?? 'USD',
+    asOf: meta.regularMarketTime ? meta.regularMarketTime * 1000 : Date.now(),
+  };
 }
 
 async function fetchStooqQuote(symbol: string): Promise<QuoteResponse | QuoteError> {
@@ -43,7 +108,7 @@ async function fetchStooqQuote(symbol: string): Promise<QuoteResponse | QuoteErr
 
   let res: Response;
   try {
-    res = await fetch(url);
+    res = await fetch(url, { signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
   } catch (e) {
     return { error: `network: ${(e as Error).message}`, status: 502 };
   }
