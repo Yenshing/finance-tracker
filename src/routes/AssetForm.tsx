@@ -38,6 +38,7 @@ interface FormState {
   quantity: string;
   manualUnitPrice: string;
   cryptoId: string;
+  avgCost: string;
   notes: string;
   deductEnabled: boolean;
   deductAccountId: string; // string for select value; '' = unselected
@@ -57,6 +58,7 @@ const blank = (currency: string): FormState => ({
   quantity: '',
   manualUnitPrice: '',
   cryptoId: CRYPTOS[0].id,
+  avgCost: '',
   notes: '',
   deductEnabled: false,
   deductAccountId: '',
@@ -132,6 +134,7 @@ export default function AssetForm() {
             ? String(existing.manualUnitPrice)
             : '',
         cryptoId,
+        avgCost: existing.avgCost !== undefined ? String(existing.avgCost) : '',
         notes: existing.notes ?? '',
         deductEnabled: false,
         deductAccountId: '',
@@ -180,6 +183,17 @@ export default function AssetForm() {
       return;
     }
 
+    // Average cost is record-only and only meaningful per share / coin.
+    let avgCost: number | undefined;
+    if ((form.type === 'stock' || form.type === 'crypto') && form.avgCost.trim()) {
+      const parsed = parseAmount(form.avgCost);
+      if (parsed === null || parsed < 0) {
+        alert('請輸入有效的成本均價');
+        return;
+      }
+      avgCost = parsed;
+    }
+
     setSaving(true);
     setPriceError(null);
     try {
@@ -207,6 +221,7 @@ export default function AssetForm() {
           symbol: normalized,
           quantity: qty,
           broker: form.broker,
+          avgCost,
           notes: form.notes.trim() || undefined,
         };
         stockSymbolToFetch = normalized;
@@ -228,6 +243,7 @@ export default function AssetForm() {
           currency: 'USD',
           symbol: cryptoMeta.id,
           quantity: qty,
+          avgCost,
           notes: form.notes.trim() || undefined,
         };
         cryptoIdToFetch = cryptoMeta.id;
@@ -341,6 +357,11 @@ export default function AssetForm() {
   const isStock = form.type === 'stock';
   const isCrypto = form.type === 'crypto';
   const brokerMeta = BROKER_BY_CODE[form.broker];
+  const assetCurrency = isStock
+    ? brokerMeta.currency
+    : isCrypto
+      ? 'USD'
+      : form.currency;
 
   return (
     <div className="mx-auto max-w-xl">
@@ -490,6 +511,17 @@ export default function AssetForm() {
           </div>
         )}
 
+        {(isStock || isCrypto) && (
+          <Field label="成本均價（可選，僅供紀錄）">
+            <AmountInput
+              value={form.avgCost}
+              onChange={(v) => update('avgCost', v)}
+              placeholder={isStock ? '每股平均成本，含手續費' : '每單位平均成本'}
+              unit={assetCurrency}
+            />
+          </Field>
+        )}
+
         {!isEdit && (isStock || isCrypto) && (
           <DeductionSection
             currency={isStock ? brokerMeta.currency : 'USD'}
@@ -505,9 +537,7 @@ export default function AssetForm() {
 
         {isEdit && form.category === 'investment' && (
           <DeductionSection
-            currency={
-              isStock ? brokerMeta.currency : isCrypto ? 'USD' : form.currency
-            }
+            currency={assetCurrency}
             liquidAccounts={liquidAccounts ?? []}
             enabled={form.deductEnabled}
             accountId={form.deductAccountId}

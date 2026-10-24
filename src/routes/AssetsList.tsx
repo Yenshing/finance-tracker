@@ -23,10 +23,9 @@ import {
   useAmountsHidden,
   useFormatMoney,
 } from '../state/useAmountFormat';
+import { useUiStore, type AssetSortMode } from '../state/uiPreferences';
 import type { AssetView } from '../domain/portfolio';
 import type { Asset } from '../db/types';
-
-type SortMode = 'value_desc' | 'name_asc';
 
 const COLLAPSE_STORAGE_KEY = 'finance-tracker:assets-collapsed';
 
@@ -65,7 +64,8 @@ function totalOf(items: AssetView[]): number {
 export default function AssetsList() {
   const portfolio = usePortfolio();
   const location = useLocation();
-  const [sort, setSort] = useState<SortMode>('value_desc');
+  const sort = useUiStore((s) => s.assetSort);
+  const setSort = useUiStore((s) => s.setAssetSort);
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
 
@@ -168,7 +168,7 @@ export default function AssetsList() {
           <label className="text-xs text-gray-500">排序</label>
           <select
             value={sort}
-            onChange={(e) => setSort(e.target.value as SortMode)}
+            onChange={(e) => setSort(e.target.value as AssetSortMode)}
             className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
           >
             <option value="value_desc">金額大小</option>
@@ -586,6 +586,19 @@ function AssetRow({
       ? (valueInBase / blockTotal) * 100
       : null;
 
+  const unitPrice =
+    valueInAssetCurrency > 0 && asset.quantity
+      ? valueInAssetCurrency / asset.quantity
+      : null;
+  const avgCostLine = asset.avgCost !== undefined && (
+    <div className="text-gray-400">
+      均價 {fmt(asset.avgCost, asset.currency)}
+      {asset.avgCost > 0 && unitPrice !== null && !stale && (
+        <> · {formatReturn(unitPrice, asset.avgCost)}</>
+      )}
+    </div>
+  );
+
   let detail: React.ReactNode;
   if (isStock) {
     detail = (
@@ -607,6 +620,7 @@ function AssetRow({
             </>
           ) : null}
         </div>
+        {avgCostLine}
         {source === 'cache' && pricedAt && (
           <div className="text-gray-400">
             報價：{new Date(pricedAt).toLocaleString('zh-TW')}
@@ -631,6 +645,7 @@ function AssetRow({
             </>
           ) : null}
         </div>
+        {avgCostLine}
         {pricedAt && (
           <div className="text-gray-400">
             報價：{new Date(pricedAt).toLocaleString('zh-TW')}
@@ -685,6 +700,10 @@ function AssetRow({
   );
 }
 
+function formatReturn(price: number, avgCost: number): string {
+  const pct = ((price - avgCost) / avgCost) * 100;
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+}
 
 interface DeleteModalProps {
   asset: Asset;
