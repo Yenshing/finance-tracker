@@ -39,6 +39,15 @@ const SnapshotSchema = z.object({
   baseCurrency: z.string(),
   totalNetWorth: z.number(),
   byCategory: z.record(CategorySchema, z.number()),
+  byInvestmentBucket: z
+    .object({
+      us_sub_broker: z.number(),
+      us_overseas: z.number(),
+      tw_stock: z.number(),
+      crypto: z.number(),
+      other: z.number(),
+    })
+    .optional(),
   source: z.enum(['auto', 'manual']),
 });
 
