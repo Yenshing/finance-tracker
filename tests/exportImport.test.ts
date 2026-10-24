@@ -32,6 +32,13 @@ describe('export/import round-trip', () => {
       baseCurrency: 'TWD',
       totalNetWorth: 1_300_000,
       byCategory: { liquid: 250_000, investment: 800_000, fixed: 250_000 },
+      byInvestmentBucket: {
+        us_sub_broker: 300_000,
+        us_overseas: 100_000,
+        tw_stock: 350_000,
+        crypto: 50_000,
+        other: 0,
+      },
       source: 'manual',
     });
 
@@ -50,6 +57,9 @@ describe('export/import round-trip', () => {
     ]);
     expect(restored[0].totalNetWorth).toBe(1_234_567);
     expect(restored[1].source).toBe('manual');
+    // Older snapshots predate the bucket breakdown; newer ones must keep it.
+    expect(restored[0].byInvestmentBucket).toBeUndefined();
+    expect(restored[1].byInvestmentBucket?.tw_stock).toBe(350_000);
   });
 
   it('preserves assets and settings through JSON serialization', async () => {
