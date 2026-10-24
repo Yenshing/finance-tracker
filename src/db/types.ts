@@ -21,6 +21,12 @@ export interface Asset {
   broker?: Broker;
   manualValue?: number;
   manualUnitPrice?: number;
+  /**
+   * Optional average cost per unit (share / coin) in the asset's own
+   * currency, for stock and crypto. Record-only: it never affects valuation,
+   * snapshots or net worth.
+   */
+  avgCost?: number;
   notes?: string;
   archivedAt?: number;
   createdAt: number;

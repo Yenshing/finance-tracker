@@ -586,6 +586,19 @@ function AssetRow({
       ? (valueInBase / blockTotal) * 100
       : null;
 
+  const unitPrice =
+    valueInAssetCurrency > 0 && asset.quantity
+      ? valueInAssetCurrency / asset.quantity
+      : null;
+  const avgCostLine = asset.avgCost !== undefined && (
+    <div className="text-gray-400">
+      均價 {fmt(asset.avgCost, asset.currency)}
+      {asset.avgCost > 0 && unitPrice !== null && !stale && (
+        <> · {formatReturn(unitPrice, asset.avgCost)}</>
+      )}
+    </div>
+  );
+
   let detail: React.ReactNode;
   if (isStock) {
     detail = (
@@ -607,6 +620,7 @@ function AssetRow({
             </>
           ) : null}
         </div>
+        {avgCostLine}
         {source === 'cache' && pricedAt && (
           <div className="text-gray-400">
             報價：{new Date(pricedAt).toLocaleString('zh-TW')}
@@ -631,6 +645,7 @@ function AssetRow({
             </>
           ) : null}
         </div>
+        {avgCostLine}
         {pricedAt && (
           <div className="text-gray-400">
             報價：{new Date(pricedAt).toLocaleString('zh-TW')}
@@ -685,6 +700,10 @@ function AssetRow({
   );
 }
 
+function formatReturn(price: number, avgCost: number): string {
+  const pct = ((price - avgCost) / avgCost) * 100;
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+}
 
 interface DeleteModalProps {
   asset: Asset;

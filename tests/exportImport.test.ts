@@ -68,6 +68,7 @@ describe('export/import round-trip', () => {
       symbol: 'AAPL',
       quantity: 10,
       broker: 'sub_broker',
+      avgCost: 150,
     });
     await settingsRepo.update({ baseCurrency: 'USD' });
 
@@ -89,6 +90,7 @@ describe('export/import round-trip', () => {
 
     const restored = await assetsRepo.listActive();
     expect(restored.map((a) => a.name).sort()).toEqual(['Apple', '玉山']);
+    expect(restored.find((a) => a.name === 'Apple')?.avgCost).toBe(150);
     const settings = await settingsRepo.get();
     expect(settings.baseCurrency).toBe('USD');
   });

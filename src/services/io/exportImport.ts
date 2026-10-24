@@ -25,6 +25,7 @@ const AssetSchema = z.object({
   broker: BrokerSchema.optional(),
   manualValue: z.number().optional(),
   manualUnitPrice: z.number().optional(),
+  avgCost: z.number().optional(),
   notes: z.string().optional(),
   archivedAt: z.number().optional(),
   createdAt: z.number(),
