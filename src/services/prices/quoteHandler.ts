@@ -6,7 +6,10 @@
  * Providers:
  *   - US (default): Yahoo Finance chart API (latest regular-market price);
  *     falls back to Stooq CSV if Yahoo fails.
- *   - TW (`.TW` suffix): TWSE STOCK_DAY first; falls back to TPEx OpenAPI for OTC.
+ *   - TW (`.TW` suffix): TWSE OpenAPI (listed, bulk daily close), then TPEx
+ *     OpenAPI (OTC), then the legacy TWSE STOCK_DAY endpoint as a last resort.
+ *     www.twse.com.tw round-robins across many backends and some of them never
+ *     answer, so every TW request carries a timeout.
  *
  * Neither TWSE nor TPEx return CORS headers, so the browser must call us — not them.
  */
@@ -149,13 +152,23 @@ async function fetchTaiwanQuote(symbol: string): Promise<QuoteResponse | QuoteEr
     return { error: 'invalid TW code', status: 400 };
   }
 
-  const twse = await fetchFromTwse(code);
-  if (twse.kind === 'ok') return twse.value;
-  if (twse.kind === 'fatal') return twse.error;
+  const openapi = await fetchFromTwseOpenApi(code);
+  if (openapi.kind === 'ok') return openapi.value;
 
   const tpex = await fetchFromTpex(code);
   if (tpex.kind === 'ok') return tpex.value;
+
+  // Both daily lists loaded and neither has the code: treat as unknown symbol.
+  if (openapi.kind === 'not_found' && tpex.kind === 'not_found') {
+    return { error: 'symbol not found on TWSE or TPEx', status: 404 };
+  }
+
+  // A list failed to load or had no usable price (e.g. suspended): last resort.
+  const twse = await fetchFromTwse(code);
+  if (twse.kind === 'ok') return twse.value;
+  if (openapi.kind === 'fatal') return openapi.error;
   if (tpex.kind === 'fatal') return tpex.error;
+  if (twse.kind === 'fatal') return twse.error;
 
   return { error: 'symbol not found on TWSE or TPEx', status: 404 };
 }
@@ -171,13 +184,81 @@ interface TwseEnvelope {
   data?: string[][];
 }
 
+interface TwseOpenApiRow {
+  Date?: string;
+  Code?: string;
+  ClosingPrice?: string;
+}
+
+interface TwseOpenApiCache {
+  byCode: Map<string, TwseOpenApiRow>;
+  fetchedAt: number;
+}
+let twseOpenApiCache: TwseOpenApiCache | null = null;
+
+async function getTwseOpenApiAll(): Promise<TwseOpenApiCache | { error: QuoteError }> {
+  if (twseOpenApiCache && Date.now() - twseOpenApiCache.fetchedAt < TPEX_CACHE_MS) {
+    return twseOpenApiCache;
+  }
+  const url = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL';
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+  } catch (e) {
+    return { error: { error: `TWSE OpenAPI network: ${(e as Error).message}`, status: 502 } };
+  }
+  if (!res.ok) {
+    return { error: { error: `TWSE OpenAPI upstream ${res.status}`, status: 502 } };
+  }
+  let rows: TwseOpenApiRow[];
+  try {
+    rows = (await res.json()) as TwseOpenApiRow[];
+  } catch {
+    return { error: { error: 'TWSE OpenAPI JSON parse failed', status: 502 } };
+  }
+  if (!Array.isArray(rows)) {
+    return { error: { error: 'TWSE OpenAPI unexpected shape', status: 502 } };
+  }
+  const byCode = new Map<string, TwseOpenApiRow>();
+  for (const row of rows) {
+    if (row.Code) byCode.set(row.Code, row);
+  }
+  twseOpenApiCache = { byCode, fetchedAt: Date.now() };
+  return twseOpenApiCache;
+}
+
+async function fetchFromTwseOpenApi(code: string): Promise<TaiwanFetchOutcome> {
+  const cache = await getTwseOpenApiAll();
+  if ('error' in cache) {
+    return { kind: 'fatal', error: cache.error };
+  }
+  const row = cache.byCode.get(code);
+  if (!row) return { kind: 'not_found' };
+  const price = Number((row.ClosingPrice ?? '').replace(/,/g, '').trim());
+  if (!Number.isFinite(price) || price <= 0) {
+    // e.g. suspended / no trade today — let the legacy endpoint find the last close.
+    return { kind: 'fatal', error: { error: 'TWSE OpenAPI unparseable price', status: 502 } };
+  }
+  const asOf = parseRocCompactDate(row.Date ?? '') ?? Date.now();
+  return {
+    kind: 'ok',
+    value: { symbol: `${code}.TW`, price, currency: 'TWD', asOf },
+  };
+}
+
 async function fetchFromTwse(code: string): Promise<TaiwanFetchOutcome> {
   const url = `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&stockNo=${encodeURIComponent(
     code,
   )}`;
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Accept: 'application/json' } });
+    res = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
   } catch (e) {
     return { kind: 'fatal', error: { error: `TWSE network: ${(e as Error).message}`, status: 502 } };
   }
@@ -233,7 +314,10 @@ async function getTpexAll(): Promise<TpexCache | { error: QuoteError }> {
   const url = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes';
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Accept: 'application/json' } });
+    res = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
   } catch (e) {
     return { error: { error: `TPEx network: ${(e as Error).message}`, status: 502 } };
   }
